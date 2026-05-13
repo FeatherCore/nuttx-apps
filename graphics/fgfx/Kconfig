@@ -1,0 +1,17 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+menuconfig GRAPHICS_FGFX
+	bool "Feather Graphics (FGFX)"
+	default n
+	depends on !LIBM_NONE
+	---help---
+		Enable FGFX as an apps-side graphics library.
+
+		FGFX currently builds the C core, the software oracle renderer,
+		the Trace diagnostics recorder, and the Blitter2D-like/Nema-like
+		non-submit command encoder scaffolds.  Enabling this option only
+		compiles the library into apps; it does not select a real hardware
+		target, install a submit path, or make LVGL use FGFX automatically.
