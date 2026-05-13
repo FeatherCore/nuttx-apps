@@ -921,13 +921,14 @@ int nxboot_perform_update(bool check_only)
       return ERROR;
     }
 
+  nxboot_progress(nxboot_progress_start, validate_primary);
   if (!validate_image(primary))
     {
       ret = ERROR;
     }
+  nxboot_progress(nxboot_progress_end);
 
   flash_partition_close(primary);
 
   return ret;
 }
-
