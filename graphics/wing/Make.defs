@@ -1,0 +1,18 @@
+############################################################################
+# apps/graphics/wing/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_GRAPHICS_WING),)
+CONFIGURED_APPS += $(APPDIR)/graphics/wing
+
+# Public Wing and LVGL-compatible facade headers:
+#   #include <wing/wing.h>
+#   #include <lvgl.h>
+#   #include <lvgl/lvgl.h>
+
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/../stacks/wing/include
+CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/../stacks/wing/include
+endif

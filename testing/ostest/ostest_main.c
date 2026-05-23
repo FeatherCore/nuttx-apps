@@ -52,7 +52,11 @@
 
 #define PRIORITY         100
 #define NARGS              4
-#define HALF_SECOND_USEC 500000L
+#ifdef CONFIG_TESTING_OSTEST_DELAY_USEC
+#  define HALF_SECOND_USEC CONFIG_TESTING_OSTEST_DELAY_USEC
+#else
+#  define HALF_SECOND_USEC 500000L
+#endif
 
 /****************************************************************************
  * Private Data
@@ -101,6 +105,36 @@ static const char g_putenv_value[] = "Variable1=BadValue3";
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: startup_trace
+ ****************************************************************************/
+
+#ifdef CONFIG_TESTING_OSTEST_STARTUP_TRACE
+static void startup_trace_write_all(const char *msg, size_t len)
+{
+  ssize_t nwritten;
+
+  while (len > 0)
+    {
+      nwritten = write(1, msg, len);
+      if (nwritten <= 0)
+        {
+          return;
+        }
+
+      msg += nwritten;
+      len -= nwritten;
+    }
+}
+
+static void startup_trace(const char *msg)
+{
+  startup_trace_write_all(msg, strlen(msg));
+}
+#else
+#  define startup_trace(msg)
+#endif
 
 /****************************************************************************
  * Name: show_memory_usage
@@ -219,10 +253,15 @@ static int user_main(int argc, char *argv[])
 
   /* Sample the memory usage now */
 
+  startup_trace("user_main: trace entry\n");
+  startup_trace("user_main: trace before initial usleep\n");
   usleep(HALF_SECOND_USEC);
+  startup_trace("user_main: trace after initial usleep\n");
 
+  startup_trace("user_main: trace before initial mallinfo\n");
   g_mmbefore = mallinfo();
   g_mmprevious = g_mmbefore;
+  startup_trace("user_main: trace after initial mallinfo\n");
 
   printf("\nuser_main: Begin argument test\n");
   printf("user_main: Started with argc=%d\n", argc);

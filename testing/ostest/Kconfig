@@ -24,6 +24,23 @@ config TESTING_OSTEST_STACKSIZE
 	---help---
 		Size of the stack used to create the ostest task.  Default is 8192.
 
+config TESTING_OSTEST_DELAY_USEC
+	int "OS test short delay in microseconds"
+	default 500000
+	---help---
+		Short delay used between ostest phases.  The default is 500 ms.
+		Board bring-up diagnostics can raise this value to leave enough
+		time to inspect a spawned test task before it wakes.
+
+config TESTING_OSTEST_STARTUP_TRACE
+	bool "Trace ostest user_main startup"
+	default n
+	---help---
+		Print short checkpoints around user_main startup, its first sleep,
+		and initial memory accounting.  This is intended for architecture
+		bring-up diagnostics where a new task may stop before the normal
+		first user_main printf.
+
 config TESTING_OSTEST_NBARRIER_THREADS
 	int "Number of barrier threads"
 	default 8

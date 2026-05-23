@@ -1,0 +1,17 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+menuconfig GRAPHICS_WING
+	bool "Wing ECS UI"
+	default n
+	depends on !GRAPHICS_LVGL
+	---help---
+		Enable the Wing ECS-backed declarative UI stack as an apps-side
+		graphics library.
+
+		Wing provides an LVGL-compatible source API facade for application
+		code while storing UI state in an ECS world.  It is intended to be
+		used instead of upstream LVGL in one build configuration, not linked
+		together with GRAPHICS_LVGL.

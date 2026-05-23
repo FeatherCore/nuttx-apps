@@ -1,0 +1,38 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config TESTING_SYSCALL_RESUME
+	tristate "Protected syscall resume test"
+	default n
+	---help---
+		Enable a small syscall resume diagnostic.  The test exercises
+		write-usleep-write sequences from ordinary task stacks so protected
+		mode wake-up and syscall return bugs can be isolated from larger
+		OS test suites.
+
+if TESTING_SYSCALL_RESUME
+
+config TESTING_SYSCALL_RESUME_PROGNAME
+	string "Program name"
+	default "sysresume"
+	---help---
+		This is the name of the program that will be used when the NSH ELF
+		program is installed.
+
+config TESTING_SYSCALL_RESUME_PRIORITY
+	int "Syscall resume test task priority"
+	default 100
+
+config TESTING_SYSCALL_RESUME_STACKSIZE
+	int "Syscall resume test stack size"
+	default 8192
+
+config TESTING_SYSCALL_RESUME_DELAY_USEC
+	int "Default sleep delay in microseconds"
+	default 5000000
+	---help---
+		Default usleep() delay used between the first and second write.
+
+endif

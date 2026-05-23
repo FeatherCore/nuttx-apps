@@ -499,19 +499,42 @@ FAR void *memorystress_thread(FAR void *arg)
 int main(int argc, FAR char *argv[])
 {
   struct memorystress_global_s global;
+  pthread_attr_t attr;
   int i;
+  int ret;
 
   global_init(&global, argc, argv);
   syslog(LOG_INFO, MEMSTRESS_PREFIX "testing...\n");
+
+  ret = pthread_attr_init(&attr);
+  if (ret != 0)
+    {
+      syslog(LOG_ERR, MEMSTRESS_PREFIX "pthread_attr_init failed: %d\n",
+             ret);
+      return 1;
+    }
+
+  ret = pthread_attr_setstacksize(&attr,
+                                  CONFIG_TESTING_MEMORY_STRESS_STACKSIZE);
+  if (ret != 0)
+    {
+      syslog(LOG_ERR, MEMSTRESS_PREFIX "setstacksize failed: %d\n", ret);
+      pthread_attr_destroy(&attr);
+      return 1;
+    }
+
   for (i = 0; i < global.nthreads; i++)
     {
-      if (pthread_create(&global.threads[i], NULL, memorystress_thread,
+      if (pthread_create(&global.threads[i], &attr, memorystress_thread,
                          (FAR void *)&global) != 0)
         {
           syslog(LOG_ERR, "Failed to create thread\n");
+          pthread_attr_destroy(&attr);
           return 1;
         }
     }
+
+  pthread_attr_destroy(&attr);
 
   for (i = 0; i < global.nthreads; i++)
     {

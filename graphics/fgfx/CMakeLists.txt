@@ -41,7 +41,47 @@ if(CONFIG_GRAPHICS_FGFX)
     ${FGFX_ROOT}/clang/src/core/fgfx_planned_executor.c
     ${FGFX_ROOT}/clang/src/core/fgfx_planner.c
     ${FGFX_ROOT}/clang/src/core/fgfx_planner_dirty.c
-    ${FGFX_ROOT}/clang/src/core/fgfx_planner_pass.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_abstract_blockers.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_abstract_commands.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_abstract_packets.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_2d.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_3d.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_3d_basic.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_3d_material.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_3d_state.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_3d_vertex.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_blockers.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_blockers_2d.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_blockers_3d.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_blockers_3d_basic.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_blockers_3d_material.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_blockers_3d_state.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_blockers_3d_vertex.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_capability_support.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_chain_readiness.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_chain_resources.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_chains.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_command_islands.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_command_splits.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_cost_policy.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_dry_run_encode.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_encode_adapter.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_fallback_placement.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_fallback_placement_bridge.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_fallback_placement_records.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_fallback_workspace.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_pass_build.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_pass_capability.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_pass_classify.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_pass_cost.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_pass_fallback_cache.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_pass_records.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_pass_storage.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_resource_contracts.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_resource_inputs.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_resource_records.c
+    ${FGFX_ROOT}/clang/src/core/planner/fgfx_planner_resource_requirements.c
     ${FGFX_ROOT}/clang/src/core/fgfx_resource.c
     ${FGFX_ROOT}/clang/src/core/fgfx_resource_cache.c
     ${FGFX_ROOT}/clang/src/core/fgfx_surface_state.c
@@ -60,6 +100,7 @@ if(CONFIG_GRAPHICS_FGFX)
     fgfx
     PUBLIC ${FGFX_ROOT}/clang/include
     PRIVATE ${FGFX_ROOT}/clang/src/core
+            ${FGFX_ROOT}/clang/src/core/planner
             ${FGFX_ROOT}/clang/src/backends/soft
             ${FGFX_ROOT}/clang/src/backends/soft/fgfx_soft)
 

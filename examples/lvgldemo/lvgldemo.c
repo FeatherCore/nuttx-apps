@@ -93,6 +93,14 @@ int main(int argc, FAR char *argv[])
 {
   lv_nuttx_dsc_t info;
   lv_nuttx_result_t result;
+  FAR char **demo_argv = &argv[1];
+  int demo_argc = argc - 1;
+#ifdef CONFIG_LV_USE_DEMO_BENCHMARK
+  FAR char *default_demo[] =
+    {
+      "benchmark"
+    };
+#endif
 
 #ifdef CONFIG_LV_USE_NUTTX_LIBUV
   uv_loop_t ui_loop;
@@ -125,7 +133,15 @@ int main(int argc, FAR char *argv[])
       return 1;
     }
 
-  if (!lv_demos_create(&argv[1], argc - 1))
+#ifdef CONFIG_LV_USE_DEMO_BENCHMARK
+  if (argc <= 1)
+    {
+      demo_argv = default_demo;
+      demo_argc = 1;
+    }
+#endif
+
+  if (!lv_demos_create(demo_argv, demo_argc))
     {
       lv_demos_show_help();
 

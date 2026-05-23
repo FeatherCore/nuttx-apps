@@ -1,0 +1,42 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+menuconfig EXAMPLES_WINGDEMO
+	tristate "Wing LVGL-compatible widget demo"
+	default n
+	depends on GRAPHICS_WING && VIDEO_FB
+	---help---
+		Build an NSH command named wingdemo for the Wing ECS UI stack.
+		The command compiles the upstream LVGL widgets demo application
+		sources unchanged and redirects their public LVGL API calls through
+		the Wing compatibility facade.
+
+if EXAMPLES_WINGDEMO
+
+config EXAMPLES_WINGDEMO_PRIORITY
+	int "wingdemo task priority"
+	default 100
+
+config EXAMPLES_WINGDEMO_STACKSIZE
+	int "wingdemo stack size"
+	default 16384
+
+config EXAMPLES_WINGDEMO_FBDEV
+	string "Framebuffer device path"
+	default "/dev/fb0"
+
+config EXAMPLES_WINGDEMO_FRAMES
+	int "Number of frames to render"
+	default 0
+	---help---
+		Default number of frames rendered before exiting.  The NSH command
+		also accepts --frames N and -f N.  Zero means render until the
+		simulator process is stopped.
+
+config EXAMPLES_WINGDEMO_FRAME_DELAY_US
+	int "Frame delay in microseconds"
+	default 33000
+
+endif # EXAMPLES_WINGDEMO
