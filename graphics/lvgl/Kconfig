@@ -28,6 +28,8 @@ menu "LVGL configuration"
 	menu "Color Settings"
 		choice LV_COLOR_DEPTH
 			prompt "Color depth"
+			default LV_COLOR_DEPTH_32 if STM32U5X9J_DK_LCD_XRGB8888
+			default LV_COLOR_DEPTH_16 if STM32U5X9J_DK_LCD_RGB565
 			default LV_COLOR_DEPTH_16
 			help
 				Color depth to be used.
