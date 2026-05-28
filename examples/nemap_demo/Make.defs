@@ -1,0 +1,10 @@
+############################################################################
+# apps/examples/nemap_demo/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_EXAMPLES_NEMAP_DEMO),)
+CONFIGURED_APPS += $(APPDIR)/examples/nemap_demo
+endif

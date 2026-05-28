@@ -1,0 +1,88 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_NEMAP_DEMO
+	tristate "NemaP/GPU2D validation demo"
+	default n
+	depends on EXAMPLES_NEMAP_DEMO_HAVE_BACKEND
+	depends on VIDEO_FB
+	---help---
+		Build a small NemaP/GPU2D validation command.  This demo opens
+		/dev/fb0 to prove the screen path is initialized, reads GPU2D
+		identity/configuration registers, initializes the selected STM32
+		low-level GPU2D root ring, submits command-list tests, and waits
+		for the GPU2D completion interrupt.
+
+if EXAMPLES_NEMAP_DEMO
+
+config EXAMPLES_NEMAP_DEMO_STM32U5
+	bool "STM32U5 GPU2D backend"
+	default y
+	depends on ARCH_CHIP_STM32U5
+	depends on STM32U5_GPU2D
+	---help---
+		Use the STM32U5 private GPU2D register and command-list backend.
+
+config EXAMPLES_NEMAP_DEMO_STM32N6
+	bool "STM32N6 GPU2D backend"
+	default y
+	depends on ARCH_CHIP_STM32N6
+	depends on STM32N6_GPU2D
+	---help---
+		Use the STM32N6 private GPU2D register and command-list backend.
+
+config EXAMPLES_NEMAP_DEMO_STM32H7RS
+	bool "STM32H7RS GPU2D backend"
+	default y
+	depends on ARCH_CHIP_STM32H7RS
+	depends on STM32H7RS_GPU2D
+	---help---
+		Use the STM32H7RS private GPU2D register and command-list backend.
+
+config EXAMPLES_NEMAP_DEMO_PROGNAME
+	string "Program name"
+	default "nemap_demo"
+
+config EXAMPLES_NEMAP_DEMO_PRIORITY
+	int "Task priority"
+	default 100
+
+config EXAMPLES_NEMAP_DEMO_STACKSIZE
+	int "Stack size"
+	default 4096
+
+config EXAMPLES_NEMAP_DEMO_FBDEV
+	string "Framebuffer device"
+	default "/dev/fb0"
+
+config EXAMPLES_NEMAP_DEMO_TIMEOUT_MS
+	int "GPU2D wait timeout in milliseconds"
+	default 1000
+
+config EXAMPLES_NEMAP_DEMO_RUN_VERIFIED_PHASES
+	bool "Run verified NemaP/GPU2D regression phases"
+	default n
+	---help---
+		Run the already validated phase 5-18 regression demos.  Keep this
+		disabled during bring-up so nemap_demo only executes the mandatory
+		identity/IRQ phases and any newly added development phases.  Enable
+		it when a full GPU2D regression pass is needed.
+
+config EXAMPLES_NEMAP_DEMO_RUN_OFFSCREEN_PHASES
+	bool "Run offscreen scratch-buffer phases"
+	default y
+	---help---
+		Run phases that target the demo's private offscreen resources.
+		STM32U5 uses static scratch arrays.  STM32N6 and STM32H7RS place
+		the resources in PSRAM after the framebuffer and before the PSRAM
+		heap so the AXI GPU2D path can access them.
+
+endif
+
+config EXAMPLES_NEMAP_DEMO_HAVE_BACKEND
+	bool
+	default y if ARCH_CHIP_STM32U5 && STM32U5_GPU2D
+	default y if ARCH_CHIP_STM32N6 && STM32N6_GPU2D
+	default y if ARCH_CHIP_STM32H7RS && STM32H7RS_GPU2D
