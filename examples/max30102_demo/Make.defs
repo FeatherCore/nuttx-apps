@@ -1,0 +1,10 @@
+############################################################################
+# apps/examples/max30102_demo/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_EXAMPLES_MAX30102_DEMO),)
+CONFIGURED_APPS += $(APPDIR)/examples/max30102_demo
+endif
