@@ -1,0 +1,32 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_BME280_DMO
+	tristate "BME280 environment sensor demo"
+	default n
+	depends on SENSORS_BME280
+	---help---
+		Enable a small BME280 temperature, humidity and pressure demo
+		command for NSH.
+
+if EXAMPLES_BME280_DMO
+
+config EXAMPLES_BME280_DMO_PROGNAME
+	string "BME280 demo program name"
+	default "bme280_demo"
+
+config EXAMPLES_BME280_DMO_PRIORITY
+	int "BME280 demo task priority"
+	default 100
+
+config EXAMPLES_BME280_DMO_STACKSIZE
+	int "BME280 demo stack size"
+	default 2048
+
+config EXAMPLES_BME280_DMO_DEVPATH
+	string "BME280 device path"
+	default "/dev/bme280"
+
+endif
