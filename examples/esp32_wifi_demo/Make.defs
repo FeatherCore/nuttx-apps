@@ -1,0 +1,10 @@
+############################################################################
+# apps/examples/esp32_wifi_demo/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_EXAMPLES_ESP32_WIFI_DEMO),)
+CONFIGURED_APPS += $(APPDIR)/examples/esp32_wifi_demo
+endif

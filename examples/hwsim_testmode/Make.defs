@@ -1,0 +1,10 @@
+############################################################################
+# apps/examples/hwsim_testmode/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_EXAMPLES_HWSIM_TESTMODE),)
+CONFIGURED_APPS += $(APPDIR)/examples/hwsim_testmode
+endif

@@ -1,0 +1,36 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_HWSIM_TESTMODE
+	tristate "mac80211_hwsim nl80211 testmode helper"
+	default n
+	depends on NET
+	depends on NETLINK_GENERIC
+	depends on WIRELESS_WIFI_LIBNL
+	depends on NL80211_TESTMODE
+	---help---
+		Enable a small NSH command that sends mac80211_hwsim private
+		nl80211 testmode commands.  It is intended for simulator
+		validation of hwsim-only hooks such as SET_PS/GET_PS.
+
+if EXAMPLES_HWSIM_TESTMODE
+
+config EXAMPLES_HWSIM_TESTMODE_PROGNAME
+	string "Program name"
+	default "hwsim_tm"
+
+config EXAMPLES_HWSIM_TESTMODE_PRIORITY
+	int "hwsim testmode task priority"
+	default 100
+
+config EXAMPLES_HWSIM_TESTMODE_STACKSIZE
+	int "hwsim testmode stack size"
+	default 8192
+
+config EXAMPLES_HWSIM_TESTMODE_IFNAME
+	string "Default interface name"
+	default "wlan0"
+
+endif

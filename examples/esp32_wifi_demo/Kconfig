@@ -1,0 +1,52 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_ESP32_WIFI_DEMO
+	tristate "ESP32-C5 ESP-Hosted NG Wi-Fi demo"
+	default n
+	depends on NET
+	select NETUTILS_NETLIB
+	select WIRELESS_ESP_HOSTED_NG
+	---help---
+		Enable an NSH command used to exercise the ESP32-C5 ESP-Hosted NG
+		host path.  The command configures the expected wlan interface,
+		sets STA mode/SSID through wireless ioctls, and applies IPv4
+		settings for bring-up tests.
+
+if EXAMPLES_ESP32_WIFI_DEMO
+
+config EXAMPLES_ESP32_WIFI_DEMO_PROGNAME
+	string "Program name"
+	default "esp32_wifi_demo"
+
+config EXAMPLES_ESP32_WIFI_DEMO_PRIORITY
+	int "ESP32 Wi-Fi demo task priority"
+	default 100
+
+config EXAMPLES_ESP32_WIFI_DEMO_STACKSIZE
+	int "ESP32 Wi-Fi demo stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+config EXAMPLES_ESP32_WIFI_DEMO_IFNAME
+	string "Wi-Fi interface name"
+	default "wlan0"
+
+config EXAMPLES_ESP32_WIFI_DEMO_SSID
+	string "Default SSID"
+	default "nuttx-esp32"
+
+config EXAMPLES_ESP32_WIFI_DEMO_IPADDR
+	string "Static IPv4 address"
+	default "192.168.50.20"
+
+config EXAMPLES_ESP32_WIFI_DEMO_NETMASK
+	string "Static IPv4 netmask"
+	default "255.255.255.0"
+
+config EXAMPLES_ESP32_WIFI_DEMO_GATEWAY
+	string "Static IPv4 gateway"
+	default "192.168.50.1"
+
+endif
