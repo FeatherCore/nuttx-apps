@@ -1,0 +1,11 @@
+############################################################################
+# apps/wireless/esp_hosted_ng/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+# The ESP-Hosted NG upstream host sources are staged here as a vendor import.
+# They are not added to CONFIGURED_APPS because the host side is a kernel
+# driver port, not a userspace app.
+

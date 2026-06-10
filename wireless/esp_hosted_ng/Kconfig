@@ -1,0 +1,32 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+menuconfig WIRELESS_ESP_HOSTED_NG
+	bool "ESP-Hosted NG source import"
+	default n
+	depends on NET
+	---help---
+		Stage the ESP-Hosted NG source import under
+		apps/wireless/esp_hosted_ng/upstream.  The upstream host side is a
+		Linux kernel module; the NuttX-facing driver glue lives under
+		nuttx/drivers/wireless/esp_hosted_ng.
+
+if WIRELESS_ESP_HOSTED_NG
+
+config WIRELESS_ESP_HOSTED_NG_SPI
+	bool "Use ESP-Hosted NG over SPI"
+	default y
+	---help---
+		Select the ESP-Hosted NG SPI transport.  The ESP32-C5 firmware must
+		be built with CONFIG_ESP_SPI_HOST_INTERFACE=y.
+
+config WIRELESS_ESP_HOSTED_NG_UPSTREAM_PATH
+	string "ESP-Hosted NG upstream source path"
+	default "apps/wireless/esp_hosted_ng/upstream"
+	---help---
+		Path to the imported ESP-Hosted NG source tree inside this
+		FeatherCore_ESP checkout.
+
+endif # WIRELESS_ESP_HOSTED_NG

@@ -1,0 +1,63 @@
+# ESP-Hosted NG NuttX staging
+
+This directory stages the ESP-Hosted NG source import used by the
+FeatherCore_ESP STM32H7S78-DK + ESP32-C5 Wi-Fi bring-up.
+
+- `upstream/` is copied from `third/esp-hosted/esp_hosted_ng`.
+- The ESP32-C5 firmware is built from `upstream/esp/esp_driver/network_adapter`.
+- The original host driver under `upstream/host` is a Linux kernel module.
+- NuttX host-side glue is tracked under
+  `nuttx/drivers/wireless/esp_hosted_ng`.
+
+The SPI firmware flashed to ESP32-C5 must be configured with:
+
+```text
+CONFIG_ESP_SPI_HOST_INTERFACE=y
+# CONFIG_ESP_SDIO_HOST_INTERFACE is not set
+```
+
+## Current NuttX host-side status
+
+The STM32H7S78-DK `nsh-esp_hosted_ng` build now includes:
+
+- `nuttx/drivers/wireless/esp_hosted_ng/esp_hosted_ng_netdev.c`
+  registers `CONFIG_WL_ESP_HOSTED_NG_IFNAME`, normally `wlan0`, as a
+  NuttX wireless netdev lower-half.
+- `nuttx/drivers/wireless/esp_hosted_ng/esp_hosted_ng_transport.c`
+  provides the ESP-Hosted NG SPI frame boundary: 1600-byte full-duplex
+  transfers, ESP payload header creation, STA data frame wrapping, and a
+  weak board hook named `esp_hosted_ng_spibus_initialize()`.
+- `apps/examples/esp32_wifi_demo` is available from NSH and drives the
+  interface through WEXT-style ioctls:
+
+```text
+nsh> esp32_wifi_demo status
+nsh> esp32_wifi_demo up
+nsh> esp32_wifi_demo connect <ssid>
+nsh> esp32_wifi_demo ip
+nsh> esp32_wifi_demo all <ssid>
+```
+
+At this point the image is intentionally honest about the remaining hardware
+gap.  The current STM32H7RS NuttX tree contains XSPI support for external
+memory, but does not yet provide a regular STM32H7RS SPI master lower-half.
+Until that exists and the board overrides `esp_hosted_ng_spibus_initialize()`,
+`esp32_wifi_demo connect` will fail with `-ENODEV` after `wlan0` is registered.
+
+The next board bring-up step is therefore:
+
+1. Add or enable a normal STM32H7RS SPI master driver.
+2. Bind the ESP32-C5 chip-select, handshake, data-ready, and optional reset
+   GPIOs in `stm32h7s78-dk`.
+3. Implement the board hook:
+
+```c
+FAR struct spi_dev_s *esp_hosted_ng_spibus_initialize(int bus)
+{
+  return stm32h7rs_spibus_initialize(bus);
+}
+```
+
+4. Replace the polling-only transport skeleton with handshake/data-ready IRQ
+   scheduling and command response handling equivalent to ESP-Hosted NG
+   `upstream/host/spi/esp_spi.c`.
