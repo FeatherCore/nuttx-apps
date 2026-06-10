@@ -1,0 +1,10 @@
+############################################################################
+# apps/examples/lsm6dsox_demo/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_EXAMPLES_LSM6DSOX_DEMO),)
+CONFIGURED_APPS += $(APPDIR)/examples/lsm6dsox_demo
+endif

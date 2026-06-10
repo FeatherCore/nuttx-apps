@@ -1,0 +1,31 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_MAX30102_DEMO
+	tristate "MAX30102 heart-rate and SpO2 demo"
+	default n
+	depends on SENSORS_MAX30102
+	---help---
+		Enable a small MAX30102 heart-rate and SpO2 demo command for NSH.
+
+if EXAMPLES_MAX30102_DEMO
+
+config EXAMPLES_MAX30102_DEMO_PROGNAME
+	string "MAX30102 demo program name"
+	default "max30102_demo"
+
+config EXAMPLES_MAX30102_DEMO_PRIORITY
+	int "MAX30102 demo task priority"
+	default 100
+
+config EXAMPLES_MAX30102_DEMO_STACKSIZE
+	int "MAX30102 demo stack size"
+	default 4096
+
+config EXAMPLES_MAX30102_DEMO_DEVPATH
+	string "MAX30102 device path"
+	default "/dev/max30102"
+
+endif

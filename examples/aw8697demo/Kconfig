@@ -1,0 +1,42 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_AW8697DEMO
+	tristate "AW8697 haptic demo"
+	default n
+	depends on INPUT_FF && FF_AW8697
+	---help---
+		Enable a small AW8697 force-feedback demo command for NSH.
+
+if EXAMPLES_AW8697DEMO
+
+config EXAMPLES_AW8697DEMO_PROGNAME
+	string "Program name"
+	default "aw8697demo"
+	---help---
+		This is the name of the program that will be used in NSH.
+
+config EXAMPLES_AW8697DEMO_PRIORITY
+	int "AW8697 demo task priority"
+	default 100
+
+config EXAMPLES_AW8697DEMO_STACKSIZE
+	int "AW8697 demo stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+config EXAMPLES_AW8697DEMO_DEVPATH
+	string "AW8697 device path"
+	default "/dev/input0"
+
+config EXAMPLES_AW8697DEMO_DURATION_MS
+	int "Default vibration duration in milliseconds"
+	default 120
+
+config EXAMPLES_AW8697DEMO_STRENGTH
+	int "Default vibration strength"
+	default 32767
+	range 1 65535
+
+endif

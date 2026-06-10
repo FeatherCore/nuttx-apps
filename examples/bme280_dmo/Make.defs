@@ -1,0 +1,10 @@
+############################################################################
+# apps/examples/bme280_dmo/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_EXAMPLES_BME280_DMO),)
+CONFIGURED_APPS += $(APPDIR)/examples/bme280_dmo
+endif
