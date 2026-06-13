@@ -4,14 +4,64 @@
 #
 
 menuconfig GRAPHICS_WING
-	bool "Wing ECS UI"
+	bool "WING GUI library"
 	default n
-	depends on !GRAPHICS_LVGL
+	select GRAPHICS_FRENDER
 	---help---
-		Enable the Wing ECS-backed declarative UI stack as an apps-side
-		graphics library.
+		Enable the WING GUI library.
 
-		Wing provides an LVGL-compatible source API facade for application
-		code while storing UI state in an ECS world.  It is intended to be
-		used instead of upstream LVGL in one build configuration, not linked
-		together with GRAPHICS_LVGL.
+		WING GUI is the application-side GUI foundation for Feather.  It is
+		not the WING Desktop system.  Applications may use WING GUI directly
+		from NSH, init scripts, or board launchers without packaging
+		themselves for WING Desktop.
+
+if GRAPHICS_WING
+
+config GRAPHICS_WING_INPUT_QUEUE_SIZE
+	int "WING input queue size"
+	default 64
+	range 1 256
+	---help---
+		Number of raw input events that a WING GUI instance can queue
+		between application ticks.
+
+		This queue carries pointer and key input before the WING runtime
+		turns them into GUI events such as click, focus, key and value
+		changed notifications.
+
+config GRAPHICS_WING_EVENT_QUEUE_SIZE
+	int "WING event queue size"
+	default 128
+	range 1 256
+	---help---
+		Number of GUI events that a WING GUI instance can queue between
+		dispatch passes.
+
+		This queue should be larger than the raw input queue because one
+		input event may create multiple GUI events through focus changes,
+		click synthesis, key delivery, bubbling and widget value updates.
+
+config GRAPHICS_WING_TIMER_MAX
+	int "WING software timer slots"
+	default 8
+	range 1 256
+	---help---
+		Number of software timers that a WING GUI instance can keep
+		active.
+
+		WING timers are advanced by the application-owned GUI loop and are
+		used for periodic UI work such as progress updates, blinking,
+		delayed state changes and future widget timers.
+
+config GRAPHICS_WING_ANIM_MAX
+	int "WING animation slots"
+	default 8
+	range 1 256
+	---help---
+		Number of animations that a WING GUI instance can keep active.
+
+		Animations are advanced by the same GUI tick path as software
+		timers.  Keeping this configurable lets small boards reduce memory
+		use while richer Desktop builds can reserve more animation slots.
+
+endif
