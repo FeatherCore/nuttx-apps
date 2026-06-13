@@ -1,0 +1,98 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+menuconfig WIRELESS_WIFI_PORTS
+	bool "Linux Wi-Fi userspace ports"
+	default n
+	depends on NET
+	---help---
+		Stage imported Linux Wi-Fi userspace components under
+		apps/wireless/wifi.  These ports are intended to talk to the
+		nl80211/cfg80211/mac80211 implementation staged under
+		nuttx/wireless/ieee80211.
+
+if WIRELESS_WIFI_PORTS
+
+config WIRELESS_WIFI_LIBNL
+	bool "Build libnl 3.2.25"
+	default n
+	---help---
+		Build the libnl 3.2.25 source import under
+		apps/wireless/wifi/libnl-3.2.25 with the common NuttX Wi-Fi port
+		headers.
+
+config WIRELESS_WIFI_WPA_SUPPLICANT
+	bool "Build wpa_supplicant 2.11"
+	default n
+	select WIRELESS_WIFI_LIBNL
+	---help---
+		Build wpa_supplicant 2.11 from the source import kept under
+		apps/wireless/wifi/wpa_supplicant-2.11.
+
+if WIRELESS_WIFI_WPA_SUPPLICANT
+
+config WIRELESS_WIFI_WPA_SUPPLICANT_STACKSIZE
+	int "wpa_supplicant stack size"
+	default 65536 if ARCH_SIM
+	default 16384
+	---help---
+		Stack size used when wpa_supplicant is started from NSH. The
+		Linux userspace port executes RSN/EAPOL processing, libnl glue,
+		and driver callbacks in this task, so the default is larger than
+		the generic NuttX task stack.
+
+config WIRELESS_WIFI_WPA_CLI_STACKSIZE
+	int "wpa_cli stack size"
+	default 16384 if ARCH_SIM
+	default DEFAULT_TASK_STACKSIZE
+	---help---
+		Stack size used by wpa_cli.
+
+config WIRELESS_WIFI_WPA_PASSPHRASE_STACKSIZE
+	int "wpa_passphrase stack size"
+	default 16384 if ARCH_SIM
+	default DEFAULT_TASK_STACKSIZE
+	---help---
+		Stack size used by wpa_passphrase.
+
+endif # WIRELESS_WIFI_WPA_SUPPLICANT
+
+config WIRELESS_WIFI_HOSTAPD
+	bool "Build hostapd 2.11"
+	default n
+	select WIRELESS_WIFI_LIBNL
+	---help---
+		Build hostapd 2.11 from the source import kept under
+		apps/wireless/wifi/hostapd-2.11.
+
+if WIRELESS_WIFI_HOSTAPD
+
+config WIRELESS_WIFI_HOSTAPD_STACKSIZE
+	int "hostapd stack size"
+	default 65536 if ARCH_SIM
+	default 16384
+	---help---
+		Stack size used when hostapd is started from NSH.
+
+config WIRELESS_WIFI_HOSTAPD_CLI_STACKSIZE
+	int "hostapd_cli stack size"
+	default 16384 if ARCH_SIM
+	default DEFAULT_TASK_STACKSIZE
+	---help---
+		Stack size used by hostapd_cli.
+
+endif # WIRELESS_WIFI_HOSTAPD
+
+config WIRELESS_WIFI_BUILD_EXPERIMENTAL
+	bool "Build staged Wi-Fi userspace ports"
+	default n
+	select WIRELESS_WIFI_LIBNL
+	select WIRELESS_WIFI_WPA_SUPPLICANT
+	select WIRELESS_WIFI_HOSTAPD
+	---help---
+		Compile the staged Wi-Fi userspace support, including libnl,
+		wpa_supplicant, and hostapd.
+
+endif # WIRELESS_WIFI_PORTS

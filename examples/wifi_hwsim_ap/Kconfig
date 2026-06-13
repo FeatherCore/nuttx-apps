@@ -1,0 +1,53 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_WIFI_HWSIM_AP
+	tristate "Wi-Fi hwsim AP demo"
+	default n
+	depends on NET
+	select NETUTILS_NETLIB
+	---help---
+		Enable a small NSH command used to bring up and inspect the AP
+		side of the NuttX sim Wi-Fi hwsim experiment.
+
+if EXAMPLES_WIFI_HWSIM_AP
+
+config EXAMPLES_WIFI_HWSIM_AP_PROGNAME
+	string "Program name"
+	default "wifi_ap_demo"
+
+config EXAMPLES_WIFI_HWSIM_AP_PRIORITY
+	int "AP demo task priority"
+	default 100
+
+config EXAMPLES_WIFI_HWSIM_AP_STACKSIZE
+	int "AP demo stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+config EXAMPLES_WIFI_HWSIM_AP_IFNAME
+	string "AP interface name"
+	default "wlan0"
+
+config EXAMPLES_WIFI_HWSIM_AP_IPADDR
+	string "AP IPv4 address"
+	default "192.168.201.1"
+
+config EXAMPLES_WIFI_HWSIM_AP_NETMASK
+	string "AP IPv4 netmask"
+	default "255.255.255.0"
+
+config EXAMPLES_WIFI_HWSIM_AP_SSID
+	string "AP SSID"
+	default "nuttx-hwsim"
+
+config EXAMPLES_WIFI_HWSIM_AP_STA1
+	string "STA1 IPv4 address"
+	default "192.168.201.2"
+
+config EXAMPLES_WIFI_HWSIM_AP_STA2
+	string "STA2 IPv4 address"
+	default "192.168.201.3"
+
+endif

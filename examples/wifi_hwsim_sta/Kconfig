@@ -1,0 +1,49 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_WIFI_HWSIM_STA
+	tristate "Wi-Fi hwsim STA demo"
+	default n
+	depends on NET
+	select NETUTILS_NETLIB
+	---help---
+		Enable a small NSH command used to bring up and inspect the STA
+		side of the NuttX sim Wi-Fi hwsim experiment.
+
+if EXAMPLES_WIFI_HWSIM_STA
+
+config EXAMPLES_WIFI_HWSIM_STA_PROGNAME
+	string "Program name"
+	default "wifi_sta_demo"
+
+config EXAMPLES_WIFI_HWSIM_STA_PRIORITY
+	int "STA demo task priority"
+	default 100
+
+config EXAMPLES_WIFI_HWSIM_STA_STACKSIZE
+	int "STA demo stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+config EXAMPLES_WIFI_HWSIM_STA_IFNAME
+	string "STA interface name"
+	default "wlan0"
+
+config EXAMPLES_WIFI_HWSIM_STA_IPADDR
+	string "STA IPv4 address"
+	default "192.168.201.2"
+
+config EXAMPLES_WIFI_HWSIM_STA_NETMASK
+	string "STA IPv4 netmask"
+	default "255.255.255.0"
+
+config EXAMPLES_WIFI_HWSIM_STA_SSID
+	string "STA SSID"
+	default "nuttx-hwsim"
+
+config EXAMPLES_WIFI_HWSIM_STA_PEER
+	string "Peer IPv4 address"
+	default "192.168.201.1"
+
+endif

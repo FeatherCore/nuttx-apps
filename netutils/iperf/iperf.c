@@ -114,10 +114,36 @@ static int iperf_run_udp_client(FAR struct iperf_ctrl_t *ctrl);
 static int iperf_run_tcp_client(FAR struct iperf_ctrl_t *ctrl);
 static void iperf_task_traffic(FAR void *arg);
 static uint32_t iperf_get_buffer_len(FAR struct iperf_ctrl_t *ctrl);
+static int iperf_bind_client(FAR struct iperf_ctrl_t *ctrl, int sockfd,
+                             sa_family_t family);
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+static int iperf_bind_client(FAR struct iperf_ctrl_t *ctrl, int sockfd,
+                             sa_family_t family)
+{
+  struct sockaddr_in local;
+
+  if (family != AF_INET || ctrl->cfg.sip == 0)
+    {
+      return 0;
+    }
+
+  memset(&local, 0, sizeof(local));
+  local.sin_family = AF_INET;
+  local.sin_port = 0;
+  local.sin_addr.s_addr = ctrl->cfg.sip;
+
+  if (bind(sockfd, (FAR struct sockaddr *)&local, sizeof(local)) < 0)
+    {
+      iperf_show_socket_error_reason("client bind", sockfd);
+      return -1;
+    }
+
+  return 0;
+}
 
 /****************************************************************************
  * Name: iperf_is_udp_client
@@ -704,6 +730,12 @@ static int iperf_udp_client(FAR struct iperf_ctrl_t *ctrl,
 
   setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
+  if (iperf_bind_client(ctrl, sockfd, addr->sa_family) < 0)
+    {
+      close(sockfd);
+      return -1;
+    }
+
   iperf_start_report(ctrl);
   buffer = ctrl->buffer;
   udp = (FAR struct iperf_udp_pkt_t *)buffer;
@@ -790,9 +822,16 @@ static int iperf_tcp_client(FAR struct iperf_ctrl_t *ctrl,
       return -1;
     }
 
+  if (iperf_bind_client(ctrl, sockfd, addr->sa_family) < 0)
+    {
+      close(sockfd);
+      return -1;
+    }
+
   if (connect(sockfd, addr, addrlen) < 0)
     {
       iperf_show_socket_error_reason("tcp client connect", sockfd);
+      close(sockfd);
       return -1;
     }
 

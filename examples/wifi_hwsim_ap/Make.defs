@@ -1,0 +1,10 @@
+############################################################################
+# apps/examples/wifi_hwsim_ap/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_EXAMPLES_WIFI_HWSIM_AP),)
+CONFIGURED_APPS += $(APPDIR)/examples/wifi_hwsim_ap
+endif

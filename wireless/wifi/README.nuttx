@@ -1,0 +1,19 @@
+Linux Wi-Fi Userspace Ports
+===========================
+
+This directory stages the userspace pieces that will eventually talk to the
+NuttX-side nl80211/cfg80211/mac80211 port in nuttx/wireless/ieee80211.
+
+Imported source drops:
+
+  libnl-3.2.25
+  wpa_supplicant-2.11
+  hostapd-2.11
+
+NuttX-specific public port headers live under:
+
+  common/include
+
+Keep common app-side portability definitions there instead of editing upstream
+headers.  The nl80211 UAPI should come from the NuttX-side imported kernel UAPI
+include path so userspace and kernel-side ports do not drift.

@@ -54,6 +54,8 @@
  * Private Type
  ****************************************************************************/
 
+typedef clock_t sclock_t;
+
 typedef struct wdtest_param_s
 {
   FAR struct wdog_s *wdog;
