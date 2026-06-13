@@ -1,0 +1,238 @@
+menu "BlueZ userspace port"
+	depends on NET_LINUX_BLUETOOTH
+
+config LINUX_BLUEZ_PORT
+	bool "Full BlueZ userspace port root"
+	default y
+	depends on NET_LINUX_BLUETOOTH
+	---help---
+		Enable the apps-side BlueZ port root.  The complete upstream BlueZ
+		source is exposed under apps/wireless/linux_bluetooth/bluez/upstream,
+		while NuttX-specific executable adapters and shims live under this
+		bluez subtree.
+
+config LINUX_BLUEZ_BNEPTEST
+	tristate "BlueZ bneptest compatibility tool"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezbneptest, the first apps-side BlueZ tool adapter for
+		the Linux Bluetooth port.  It follows the BlueZ tools/bneptest.c
+		network-profile shape closely enough to verify the native fd
+		handoff boundary: connected L2CAP socket fd passed to BNEPCONNADD,
+		then BNEP connlist/conninfo/conndel cleanup.
+
+if LINUX_BLUEZ_BNEPTEST
+
+config LINUX_BLUEZ_BNEPTEST_PROGNAME
+	string "bluezbneptest program name"
+	default "bluezbneptest"
+
+config LINUX_BLUEZ_BNEPTEST_PRIORITY
+	int "bluezbneptest task priority"
+	default 100
+
+config LINUX_BLUEZ_BNEPTEST_STACKSIZE
+	int "bluezbneptest stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_NETWORK
+	tristate "BlueZ Network Profile-shaped adapter"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable blueznetwork, a BlueZ profiles/network-shaped adapter.
+		It follows the connection.c + bnep.c lifecycle more closely than
+		the standalone bneptest tool: profile connect creates a connected
+		L2CAP socket, passes that fd to BNEPCONNADD with the BlueZ
+		BNEP_SETUP_RESPONSE flag, exposes status, and disconnects through
+		BNEPCONNDEL.
+
+if LINUX_BLUEZ_NETWORK
+
+config LINUX_BLUEZ_NETWORK_PROGNAME
+	string "blueznetwork program name"
+	default "blueznetwork"
+
+config LINUX_BLUEZ_NETWORK_PRIORITY
+	int "blueznetwork task priority"
+	default 100
+
+config LINUX_BLUEZ_NETWORK_STACKSIZE
+	int "blueznetwork stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_MGMT
+	tristate "BlueZ mgmt control client"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezmgmt, a BlueZ-style mgmt control client that uses
+		AF_BLUETOOTH/BTPROTO_HCI with HCI_CHANNEL_CONTROL to drive the
+		NuttX Linux Bluetooth port through the same socket ABI expected
+		by BlueZ user space.
+
+if LINUX_BLUEZ_MGMT
+
+config LINUX_BLUEZ_MGMT_PROGNAME
+	string "bluezmgmt program name"
+	default "bluezmgmt"
+
+config LINUX_BLUEZ_MGMT_PRIORITY
+	int "bluezmgmt task priority"
+	default 100
+
+config LINUX_BLUEZ_MGMT_STACKSIZE
+	int "bluezmgmt stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_DAEMON
+	tristate "BlueZ bluetoothd-shaped mgmt daemon smoke"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezdaemon, a daemon-shaped BlueZ adapter that keeps a
+		long-lived AF_BLUETOOTH/BTPROTO_HCI mgmt control socket and drives
+		the same controller initialization, discovery, pairing, connection
+		info, and disconnect sequence that bluetoothd would issue through
+		src/main.c and src/adapter.c.  This is an incremental entry point
+		toward the full bluetoothd/profile port, not a replacement for the
+		complete upstream daemon.
+
+if LINUX_BLUEZ_DAEMON
+
+config LINUX_BLUEZ_DAEMON_PROGNAME
+	string "bluezdaemon program name"
+	default "bluezdaemon"
+
+config LINUX_BLUEZ_DAEMON_PRIORITY
+	int "bluezdaemon task priority"
+	default 100
+
+config LINUX_BLUEZ_DAEMON_STACKSIZE
+	int "bluezdaemon stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_AUDIO
+	tristate "BlueZ audio profile-shaped socket smoke"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezaudio, a BlueZ profile-shaped audio adapter that
+		drives the Linux Bluetooth L2CAP and ISO socket paths from the
+		apps/wireless/linux_bluetooth/bluez subtree.  It is an incremental
+		bridge toward the full BlueZ A2DP and LE Audio profile plugins,
+		and currently validates synthetic media payload transport over the
+		NuttX Linux-BT/VHCI/hwsim path.
+
+if LINUX_BLUEZ_AUDIO
+
+config LINUX_BLUEZ_AUDIO_PROGNAME
+	string "bluezaudio program name"
+	default "bluezaudio"
+
+config LINUX_BLUEZ_AUDIO_PRIORITY
+	int "bluezaudio task priority"
+	default 100
+
+config LINUX_BLUEZ_AUDIO_STACKSIZE
+	int "bluezaudio stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+config LINUX_BLUEZ_AUDIO_LIBSBC
+	bool "Use real libsbc backend for BlueZ A2DP SBC"
+	default n
+	---help---
+		Enable this only after an SBC codec implementation has been
+		imported into the NuttX apps tree and wired into the
+		bluezaudio build.  When disabled, the A2DP hwsim gate must
+		report the deterministic SBC-frame backend instead of claiming
+		a real libsbc encode/decode path.
+
+endif
+
+config LINUX_BLUEZ_BTMON
+	tristate "BlueZ btmon monitor client"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezbtmon, a BlueZ btmon-style monitor client that uses
+		AF_BLUETOOTH/BTPROTO_HCI with HCI_CHANNEL_MONITOR to verify the
+		HCI monitor socket ABI and observe mgmt control activity.
+
+if LINUX_BLUEZ_BTMON
+
+config LINUX_BLUEZ_BTMON_PROGNAME
+	string "bluezbtmon program name"
+	default "bluezbtmon"
+
+config LINUX_BLUEZ_BTMON_PRIORITY
+	int "bluezbtmon task priority"
+	default 100
+
+config LINUX_BLUEZ_BTMON_STACKSIZE
+	int "bluezbtmon stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_HCIIOCTL
+	tristate "BlueZ HCI ioctl client"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezhciioctl, a BlueZ hciconfig-style client that uses
+		AF_BLUETOOTH/BTPROTO_HCI and HCI ioctl commands such as
+		HCIGETDEVLIST, HCIGETDEVINFO, HCIDEVUP, HCIDEVDOWN,
+		HCIDEVRESET, and HCIDEVRESTAT.
+
+if LINUX_BLUEZ_HCIIOCTL
+
+config LINUX_BLUEZ_HCIIOCTL_PROGNAME
+	string "bluezhciioctl program name"
+	default "bluezhciioctl"
+
+config LINUX_BLUEZ_HCIIOCTL_PRIORITY
+	int "bluezhciioctl task priority"
+	default 100
+
+config LINUX_BLUEZ_HCIIOCTL_STACKSIZE
+	int "bluezhciioctl stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_HCIRAW
+	tristate "BlueZ HCI raw command client"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezhciraw, a BlueZ hcitool-style client that uses
+		AF_BLUETOOTH/BTPROTO_HCI with HCI_CHANNEL_RAW, HCI_FILTER
+		sockopts, and raw HCI command/event traffic.
+
+if LINUX_BLUEZ_HCIRAW
+
+config LINUX_BLUEZ_HCIRAW_PROGNAME
+	string "bluezhciraw program name"
+	default "bluezhciraw"
+
+config LINUX_BLUEZ_HCIRAW_PRIORITY
+	int "bluezhciraw task priority"
+	default 100
+
+config LINUX_BLUEZ_HCIRAW_STACKSIZE
+	int "bluezhciraw stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+endmenu

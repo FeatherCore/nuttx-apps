@@ -1,0 +1,117 @@
+#
+# For a description of the syntax of this configuration file,
+# see misc/tools/kconfig-language.txt.
+#
+
+menu "Linux Bluetooth port tools"
+	depends on NET_LINUX_BLUETOOTH
+
+config LINUX_BTCTL
+	tristate "Linux Bluetooth control tool"
+	default y
+	depends on NET_LINUX_BLUETOOTH
+	---help---
+		Enable btctl, the NSH command frontend for the Linux-semantics
+		Bluetooth stack port.  This is a user-space validation/control
+		tool; Linux kernel behavior belongs under nuttx/wireless or
+		nuttx/drivers, not in this app.
+
+if LINUX_BTCTL
+
+config LINUX_BTCTL_PROGNAME
+	string "btctl program name"
+	default "btctl"
+
+config LINUX_BTCTL_PRIORITY
+	int "btctl task priority"
+	default 100
+
+config LINUX_BTCTL_STACKSIZE
+	int "btctl stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BTBNEPTEST
+	tristate "Linux Bluetooth BNEP network-profile test tool"
+	default y
+	depends on NET_LINUX_BLUETOOTH
+	---help---
+		Enable btbneptest, a BlueZ bneptest-like NSH command for
+		validating the Linux BNEP socket/ioctl shape from user space.
+		This is intentionally separate from btctl so the network profile
+		path can move toward BlueZ/BNEPCONNADD fd handoff semantics while
+		btctl remains the lower-level probe/control tool.
+
+if LINUX_BTBNEPTEST
+
+config LINUX_BTBNEPTEST_PROGNAME
+	string "btbneptest program name"
+	default "btbneptest"
+
+config LINUX_BTBNEPTEST_PRIORITY
+	int "btbneptest task priority"
+	default 100
+
+config LINUX_BTBNEPTEST_STACKSIZE
+	int "btbneptest stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+source "$APPSDIR/wireless/linux_bluetooth/bluez/Kconfig"
+
+config LINUX_BTAUDIO
+	tristate "Linux Bluetooth audio tool"
+	default y
+	depends on NET_LINUX_BLUETOOTH_A2DP || NET_LINUX_BLUETOOTH_ISO
+	---help---
+		Enable btaudio, the NSH command frontend for A2DP and LE Audio
+		paths in the Linux-semantics Bluetooth stack port.  This stays in
+		apps because it is user-space orchestration and validation, not a
+		kernel Bluetooth protocol implementation.
+
+if LINUX_BTAUDIO
+
+config LINUX_BTAUDIO_PROGNAME
+	string "btaudio program name"
+	default "btaudio"
+
+config LINUX_BTAUDIO_PRIORITY
+	int "btaudio task priority"
+	default 100
+
+config LINUX_BTAUDIO_STACKSIZE
+	int "btaudio stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BTVHCID
+	tristate "Linux Bluetooth VHCI hwsim bridge daemon"
+	default y
+	depends on NET_LINUX_BLUETOOTH
+	---help---
+		Enable btvhcid, a user-space VHCI/hwsim event pump for the
+		Linux-semantics Bluetooth stack port.  It stays in apps because it
+		is orchestration between a userspace-facing VHCI endpoint and the
+		SIM hwsim public-file medium; protocol behavior remains in the
+		imported Linux kernel stack under nuttx.
+
+if LINUX_BTVHCID
+
+config LINUX_BTVHCID_PROGNAME
+	string "btvhcid program name"
+	default "btvhcid"
+
+config LINUX_BTVHCID_PRIORITY
+	int "btvhcid task priority"
+	default 100
+
+config LINUX_BTVHCID_STACKSIZE
+	int "btvhcid stack size"
+	default 8192
+
+endif
+
+endmenu
