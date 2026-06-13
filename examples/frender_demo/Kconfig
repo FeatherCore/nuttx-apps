@@ -1,0 +1,40 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_FRENDER_DEMO
+	tristate "FRender standalone demo"
+	default n
+	select GRAPHICS_FRENDER
+	select GRAPHICS_FRENDER_SW
+	---help---
+		Enable a minimal NSH-runnable FRender demo.
+
+		The demo builds a backend-neutral command list, executes it through
+		the FRender software backend, and prints backend capability and
+		checksum information.
+
+if EXAMPLES_FRENDER_DEMO
+
+config EXAMPLES_FRENDER_DEMO_PROGNAME
+	string "Program name"
+	default "frender_demo"
+
+config EXAMPLES_FRENDER_DEMO_PRIORITY
+	int "FRender demo task priority"
+	default 100
+
+config EXAMPLES_FRENDER_DEMO_STACKSIZE
+	int "FRender demo stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+config EXAMPLES_FRENDER_DEMO_WIDTH
+	int "Demo surface width"
+	default 320
+
+config EXAMPLES_FRENDER_DEMO_HEIGHT
+	int "Demo surface height"
+	default 240
+
+endif

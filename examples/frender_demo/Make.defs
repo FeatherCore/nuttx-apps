@@ -1,10 +1,10 @@
 ############################################################################
-# apps/examples/fgfx_demo/Make.defs
+# apps/examples/frender_demo/Make.defs
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 ############################################################################
 
-ifneq ($(CONFIG_EXAMPLES_FGFX_DEMO),)
-CONFIGURED_APPS += $(APPDIR)/examples/fgfx_demo
+ifneq ($(CONFIG_EXAMPLES_FRENDER_DEMO),)
+CONFIGURED_APPS += $(APPDIR)/examples/frender_demo
 endif

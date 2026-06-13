@@ -1,0 +1,10 @@
+############################################################################
+# apps/graphics/frender/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_GRAPHICS_FRENDER),)
+CONFIGURED_APPS += $(APPDIR)/graphics/frender
+endif
