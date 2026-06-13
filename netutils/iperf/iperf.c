@@ -52,12 +52,14 @@
 #define IPERF_REPORT_TASK_STACK      4096
 
 #define IPERF_UDP_TX_LEN             (1472)
+#define IPERF_UDP6_TX_LEN            (1024)
 #define IPERF_UDP_RX_LEN             (16 << 10)
 #define IPERF_TCP_TX_LEN             (16 << 10)
 #define IPERF_TCP_RX_LEN             (16 << 10)
 
 #define IPERF_MAX_DELAY              64
 #define IPERF_SOCKET_RX_TIMEOUT      10
+#define IPERF_SOCKET_TX_TIMEOUT      1
 
 /****************************************************************************
  * Private Types
@@ -124,7 +126,34 @@ static int iperf_bind_client(FAR struct iperf_ctrl_t *ctrl, int sockfd,
 static int iperf_bind_client(FAR struct iperf_ctrl_t *ctrl, int sockfd,
                              sa_family_t family)
 {
+#ifdef CONFIG_NET_IPv6
+  struct sockaddr_in6 local6;
+#endif
   struct sockaddr_in local;
+
+#ifdef CONFIG_NET_IPv6
+  if (family == AF_INET6)
+    {
+      if (IN6_IS_ADDR_UNSPECIFIED(&ctrl->cfg.sip6))
+        {
+          return 0;
+        }
+
+      memset(&local6, 0, sizeof(local6));
+      local6.sin6_family = AF_INET6;
+      local6.sin6_port = 0;
+      local6.sin6_addr = ctrl->cfg.sip6;
+
+      if (bind(sockfd, (FAR struct sockaddr *)&local6,
+               sizeof(local6)) < 0)
+        {
+          iperf_show_socket_error_reason("client bind", sockfd);
+          return -1;
+        }
+
+      return 0;
+    }
+#endif
 
   if (family != AF_INET || ctrl->cfg.sip == 0)
     {
@@ -252,6 +281,19 @@ static void iperf_print_addr(FAR const char *str, FAR struct sockaddr *addr)
           FAR struct sockaddr_in *inaddr = (FAR struct sockaddr_in *)addr;
           printf("%s: %s:%d\n", str,
                  inet_ntoa(inaddr->sin_addr), htons(inaddr->sin_port));
+          return;
+        }
+#endif
+
+#ifdef CONFIG_NET_IPv6
+      case AF_INET6:
+        {
+          char buffer[INET6_ADDRSTRLEN];
+          FAR struct sockaddr_in6 *inaddr =
+            (FAR struct sockaddr_in6 *)addr;
+
+          inet_ntop(AF_INET6, &inaddr->sin6_addr, buffer, sizeof(buffer));
+          printf("%s: %s:%d\n", str, buffer, htons(inaddr->sin6_port));
           return;
         }
 #endif
@@ -448,15 +490,36 @@ static int iperf_run_server(FAR struct iperf_ctrl_t *ctrl,
     }
   else
     {
-      struct sockaddr_in addr;
-      struct sockaddr_in remote_addr;
+#ifdef CONFIG_NET_IPv6
+      if (ctrl->cfg.flag & IPERF_FLAG_IPV6)
+        {
+          struct sockaddr_in6 addr;
+          struct sockaddr_in6 remote_addr;
 
-      addr.sin_family = AF_INET;
-      addr.sin_port = htons(ctrl->cfg.sport);
-      addr.sin_addr.s_addr = ctrl->cfg.sip;
+          memset(&addr, 0, sizeof(addr));
+          memset(&remote_addr, 0, sizeof(remote_addr));
+          addr.sin6_family = AF_INET6;
+          addr.sin6_port = htons(ctrl->cfg.sport);
+          addr.sin6_addr = ctrl->cfg.sip6;
 
-      return server_func(ctrl, (FAR struct sockaddr *)&addr, sizeof(addr),
-                               (FAR struct sockaddr *)&remote_addr);
+          return server_func(ctrl, (FAR struct sockaddr *)&addr,
+                             sizeof(addr),
+                             (FAR struct sockaddr *)&remote_addr);
+        }
+      else
+#endif
+        {
+          struct sockaddr_in addr;
+          struct sockaddr_in remote_addr;
+
+          addr.sin_family = AF_INET;
+          addr.sin_port = htons(ctrl->cfg.sport);
+          addr.sin_addr.s_addr = ctrl->cfg.sip;
+
+          return server_func(ctrl, (FAR struct sockaddr *)&addr,
+                             sizeof(addr),
+                             (FAR struct sockaddr *)&remote_addr);
+        }
     }
 }
 
@@ -492,13 +555,31 @@ static int iperf_run_client(FAR struct iperf_ctrl_t *ctrl,
     }
   else
     {
-      struct sockaddr_in addr;
+#ifdef CONFIG_NET_IPv6
+      if (ctrl->cfg.flag & IPERF_FLAG_IPV6)
+        {
+          struct sockaddr_in6 addr;
 
-      addr.sin_family = AF_INET;
-      addr.sin_port = htons(ctrl->cfg.dport);
-      addr.sin_addr.s_addr = ctrl->cfg.dip;
+          memset(&addr, 0, sizeof(addr));
+          addr.sin6_family = AF_INET6;
+          addr.sin6_port = htons(ctrl->cfg.dport);
+          addr.sin6_addr = ctrl->cfg.dip6;
 
-      return client_func(ctrl, (FAR struct sockaddr *)&addr, sizeof(addr));
+          return client_func(ctrl, (FAR struct sockaddr *)&addr,
+                             sizeof(addr));
+        }
+      else
+#endif
+        {
+          struct sockaddr_in addr;
+
+          addr.sin_family = AF_INET;
+          addr.sin_port = htons(ctrl->cfg.dport);
+          addr.sin_addr.s_addr = ctrl->cfg.dip;
+
+          return client_func(ctrl, (FAR struct sockaddr *)&addr,
+                             sizeof(addr));
+        }
     }
 }
 
@@ -777,6 +858,7 @@ static int iperf_udp_client(FAR struct iperf_ctrl_t *ctrl,
       else
         {
           ctrl->total_len += actual_send;
+          usleep(1000);
         }
     }
 
@@ -814,6 +896,7 @@ static int iperf_tcp_client(FAR struct iperf_ctrl_t *ctrl,
   int actual_send = 0;
   int want_send = 0;
   int sockfd;
+  struct timeval t;
 
   sockfd = socket(addr->sa_family, SOCK_STREAM, IPPROTO_TCP);
   if (sockfd < 0)
@@ -827,6 +910,10 @@ static int iperf_tcp_client(FAR struct iperf_ctrl_t *ctrl,
       close(sockfd);
       return -1;
     }
+
+  t.tv_sec = IPERF_SOCKET_TX_TIMEOUT;
+  t.tv_usec = 0;
+  setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &t, sizeof(t));
 
   if (connect(sockfd, addr, addrlen) < 0)
     {
@@ -924,6 +1011,13 @@ static uint32_t iperf_get_buffer_len(FAR struct iperf_ctrl_t *ctrl)
 {
   if (iperf_is_udp_client(ctrl))
     {
+#ifdef CONFIG_NET_IPv6
+      if (ctrl->cfg.flag & IPERF_FLAG_IPV6)
+        {
+          return IPERF_UDP6_TX_LEN;
+        }
+#endif
+
       return IPERF_UDP_TX_LEN;
     }
   else if (iperf_is_udp_server(ctrl))

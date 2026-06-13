@@ -30,6 +30,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+
+#include <netinet/in.h>
 
 #ifndef __ASSEMBLY__
 
@@ -52,6 +55,7 @@ extern "C"
 #define IPERF_FLAG_UDP    (1 << 3)
 #define IPERF_FLAG_LOCAL  (1 << 4)
 #define IPERF_FLAG_RPMSG  (1 << 5)
+#define IPERF_FLAG_IPV6   (1 << 6)
 
 /****************************************************************************
  * Public Types
@@ -62,6 +66,10 @@ struct iperf_cfg_t
   uint32_t flag;
   uint32_t dip;
   uint32_t sip;
+#ifdef CONFIG_NET_IPv6
+  struct in6_addr dip6;
+  struct in6_addr sip6;
+#endif
   uint16_t dport;
   uint16_t sport;
   uint32_t interval;

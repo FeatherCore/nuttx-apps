@@ -76,8 +76,11 @@ $(ARGTABLE3_UNPACK): $(ARGTABLE3_TARBALL)
 	$(Q) tar zxf $(ARGTABLE3_TARBALL)
 	$(Q) mv argtable3-$(ARGTABLE3_VERSION) $(ARGTABLE3_UNPACK)
 
-# Download and unpack tarball if no git repo found
-ifeq ($(wildcard $(ARGTABLE3_UNPACK)/.git),)
+# Download and unpack tarball if no git repo found and no local source has
+# already been provided.  Feather BT hwsim keeps a minimal offline-compatible
+# argtable3 source tree here so ping/iperf simulator builds do not require
+# external network access.
+ifeq ($(wildcard $(ARGTABLE3_UNPACK)/.git)$(wildcard $(ARGTABLE3_SRCDIR)/argtable3.h),)
 context:: $(ARGTABLE3_UNPACK)
 
 distclean::
