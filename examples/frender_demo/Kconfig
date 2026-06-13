@@ -7,12 +7,12 @@ config EXAMPLES_FRENDER_DEMO
 	tristate "FRender standalone demo"
 	default n
 	select GRAPHICS_FRENDER
-	select GRAPHICS_FRENDER_SW
+	select GRAPHICS_FRENDER_FB
 	---help---
 		Enable a minimal NSH-runnable FRender demo.
 
-		The demo builds a backend-neutral command list, executes it through
-		the FRender software backend, and prints backend capability and
+		The demo builds a backend-neutral command list, dispatches it through
+		the FRender framebuffer backend to nuttx/graphics, and prints
 		checksum information.
 
 if EXAMPLES_FRENDER_DEMO

@@ -10,25 +10,38 @@ menuconfig GRAPHICS_FRENDER
 		Enable the Feather application-side render backend.
 
 		FRender owns backend-neutral drawing commands, backend capability
-		declarations, software execution, and future adapters to NuttX
-		graphics, framebuffer, NX, DMA2D, and GPU2D paths.
+		declarations, and backend dispatch through fr_execute().
+
+		Backends include: software (RGBA8888 surface), framebuffer (direct
+		/dev/fb0), NX (NX window drawing API), DMA2D, and GPU2D.
 
 if GRAPHICS_FRENDER
 
-config GRAPHICS_FRENDER_SW
-	bool "FRender software backend"
-	default y
-	---help---
-		Enable the software backend.  This backend defines first-stage
-		rendering correctness and does not require hardware acceleration.
-
-config GRAPHICS_FRENDER_FB_PRESENT
-	bool "FRender framebuffer present adapter"
+config GRAPHICS_FRENDER_FB
+	bool "FRender framebuffer backend"
 	default y if VIDEO_FB
 	depends on VIDEO_FB
 	---help---
-		Enable the framebuffer present adapter.  This adapter copies a
-		FRender RGBA8888 memory surface into a NuttX framebuffer device such
-		as /dev/fb0.
+		Enable the framebuffer backend. This backend renders directly to
+		/dev/fb0 mmap'd memory without an intermediate RGBA8888 surface.
+		Pixel format conversion happens at write time.
+
+config GRAPHICS_FRENDER_FB_PRESENT
+	bool "FRender framebuffer present adapter (legacy)"
+	default y if VIDEO_FB
+	depends on VIDEO_FB
+	---help---
+		Legacy framebuffer present adapter. Preserved for backward
+		compatibility. New code should use the framebuffer backend
+		(CONFIG_GRAPHICS_FRENDER_FB) which renders directly to fbmem.
+
+config GRAPHICS_FRENDER_NX
+	bool "FRender NX backend"
+	default n
+	depends on NX
+	---help---
+		Enable the NX backend. This backend translates FRender commands
+		to NX window drawing API calls (nx_fill, nx_drawline, nx_bitmap,
+		etc.). Requires a running NX server and an open window.
 
 endif

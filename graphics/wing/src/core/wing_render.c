@@ -733,15 +733,14 @@ int wing_gui_draw_rect(wing_context_t *ctx, const wing_rect_t *rect,
                             wing_render_color_to_fr(color));
 }
 
-int wing_gui_flush_frender_software(wing_gui_t *gui)
+int wing_gui_flush(wing_gui_t *gui, fr_backend_instance_t *backend)
 {
-  if (gui == NULL || !wing_render_surface_is_valid(gui->surface) ||
-      gui->commands == NULL)
+  if (gui == NULL || backend == NULL || gui->commands == NULL)
     {
       return -EINVAL;
     }
 
-  return fr_execute_software(&gui->surface->render_surface, gui->commands);
+  return fr_execute(backend, gui->commands);
 }
 
 uint16_t wing_gui_render_command_count(const wing_gui_t *gui)

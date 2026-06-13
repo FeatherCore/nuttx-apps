@@ -2252,16 +2252,36 @@ int main(int argc, FAR char *argv[])
   int16_t space_card_y;
   uint8_t utf8_codepoints;
 
+  fr_backend_instance_t fb_backend;
+  bool have_fb_backend;
+
   have_presenter = false;
-  presenter_open_ret = fr_fb_presenter_open(&presenter, "/dev/fb0");
+  have_fb_backend = false;
+  memset(&presenter, 0, sizeof(presenter));
   demo_width = CONFIG_EXAMPLES_WING_GUI_DEMO_WIDTH;
   demo_height = CONFIG_EXAMPLES_WING_GUI_DEMO_HEIGHT;
-  if (presenter_open_ret == 0)
-    {
-      have_presenter = true;
-      demo_width = presenter.xres;
-      demo_height = presenter.yres;
-    }
+
+  /* Open framebuffer backend once — handles both rendering and present */
+
+  {
+    struct { const char *fb_path; } fb_cfg;
+    fb_cfg.fb_path = "/dev/fb0";
+    presenter_open_ret = fr_backend_open(&fb_backend, "framebuffer",
+                                          &fb_cfg);
+    if (presenter_open_ret == 0)
+      {
+        fr_rect_t fb_bounds;
+        have_fb_backend = true;
+        have_presenter = true;
+        presenter.open = true;
+        presenter.fd = -1;
+        if (fr_backend_get_bounds(&fb_backend, &fb_bounds) == 0)
+          {
+            demo_width = fb_bounds.w;
+            demo_height = fb_bounds.h;
+          }
+      }
+  }
 
   /* Keep projected space cards near the runtime camera center where the
    * first-stage projection seed stays stable. Draggable value controls use a
@@ -3362,15 +3382,18 @@ int main(int argc, FAR char *argv[])
     {
       input_provider.presenter = &presenter;
       ret = fr_backend_caps_from_fb_presenter(&presenter, &fb_caps);
-      if (ret == 0)
+      if (have_fb_backend)
         {
-          (void)fr_backend_register_fb_presenter(&presenter);
+          fr_rect_t r;
+          fr_backend_get_bounds(&fb_backend, &r);
+          printf("wing_gui_demo: framebuffer %ux%u (backend)\n",
+                 (unsigned int)r.w, (unsigned int)r.h);
         }
-
-      printf("wing_gui_demo: framebuffer %ux%u fmt=%u bpp=%u stride=%u\n",
-             (unsigned int)presenter.xres, (unsigned int)presenter.yres,
-             (unsigned int)presenter.fmt, (unsigned int)presenter.bpp,
-             (unsigned int)presenter.stride);
+      else
+        {
+          printf("wing_gui_demo: framebuffer present skipped: %d\n",
+                 presenter_open_ret);
+        }
     }
   else
     {
@@ -3734,7 +3757,7 @@ int main(int argc, FAR char *argv[])
          (unsigned int)wing_scrollbar_get_value(&scrollbar),
          (unsigned int)range_min, (unsigned int)range_max,
          (unsigned int)wing_scrollbar_get_page_size(&scrollbar));
-  printf("wing_gui_demo: path app loop -> wing_gui_handle -> tick/timer/animation -> layout fixed/stack/center/fill -> input queue -> focus/key/text/state/close-request -> event queue -> bubbled object event -> object tree -> wing_panel/wing_scroll_view/wing_button/wing_label/wing_text_input/wing_progress/wing_slider/wing_scrollbar/wing_switch/wing_checkbox/wing_card/custom-geometry-triangle -> wing_box state style -> FRender commands -> software backend");
+  printf("wing_gui_demo: path app loop -> wing_gui_handle -> tick/timer/animation -> layout fixed/stack/center/fill -> input queue -> focus/key/text/state/close-request -> event queue -> bubbled object event -> object tree -> wing_panel/wing_scroll_view/wing_button/wing_label/wing_text_input/wing_progress/wing_slider/wing_scrollbar/wing_switch/wing_checkbox/wing_card/custom-geometry-triangle -> wing_box state style -> FRender commands -> framebuffer backend -> nxgl_* (nuttx/graphics)");
   if (have_presenter)
     {
       printf(" -> framebuffer present\n");
@@ -3848,9 +3871,9 @@ int main(int argc, FAR char *argv[])
           wing_gui_demo_print_dirty("runtime after handler", &gui);
         }
 
-      if (ret > 0)
+      if (ret > 0 && have_fb_backend)
         {
-          ret = wing_gui_flush_frender_software(&gui);
+          ret = wing_gui_flush(&gui, &fb_backend);
           if (ret < 0)
             {
               printf("wing_gui_demo: execute frame failed: %d\n", ret);
@@ -3866,15 +3889,9 @@ int main(int argc, FAR char *argv[])
                      (unsigned int)checksum);
             }
 
-          if (have_presenter)
-            {
-              ret = wing_gui_demo_present(&presenter, &surface, &frame);
-              if (ret < 0)
-                {
-                  printf("wing_gui_demo: present failed: %d\n", ret);
-                  break;
-                }
-            }
+          /* Framebuffer backend renders to fbmem and presents
+           * via fr_execute() -> present() -> FBIO_UPDATE.
+           * No separate present step needed. */
         }
 
       if (have_presenter)
@@ -3908,10 +3925,8 @@ int main(int argc, FAR char *argv[])
       usleep(WING_GUI_DEMO_FRAME_MS * 1000);
     }
 
-  if (have_presenter)
-    {
-      fr_fb_presenter_close(&presenter);
-    }
+  if (have_fb_backend)
+    fr_backend_close(&fb_backend);
 
   printf("wing_gui_demo: app task exit\n");
   wing_gui_destroy(&gui);

@@ -350,8 +350,37 @@ uint8_t fr_backend_registry_count(void);
 const fr_backend_caps_t *fr_backend_registry_get(uint8_t index);
 const fr_backend_caps_t *fr_backend_registry_find(const char *name);
 
-int fr_execute_software(fr_surface_t *surface,
-                        const fr_command_list_t *list);
+/* Opaque backend instance — defined in internal fr_backend.h.
+ * Callers create one via fr_backend_ops_*() + open(),
+ * then pass it to fr_execute(). */
+
+struct fr_backend_ops_s;
+
+typedef struct fr_backend_instance_s
+{
+  const struct fr_backend_ops_s *ops;
+  void *priv;
+} fr_backend_instance_t;
+
+/* fr_execute: dispatch a command list through a backend instance.
+ * The backend determines where pixels land (framebuffer, NX window, etc.).
+ * All drawing is delegated to nuttx/graphics. */
+
+int fr_execute(fr_backend_instance_t *backend,
+               const fr_command_list_t *list);
+
+/* Backend lifecycle — open/close/execute through a backend instance */
+
+int  fr_backend_open(fr_backend_instance_t *backend, const char *name,
+                     const void *config);
+void fr_backend_close(fr_backend_instance_t *backend);
+int  fr_backend_get_bounds(fr_backend_instance_t *backend,
+                           fr_rect_t *bounds);
+
+/* Backend ops accessors — return the vtable for each built-in backend. */
+
+const struct fr_backend_ops_s *fr_backend_ops_framebuffer(void);
+const struct fr_backend_ops_s *fr_backend_ops_nx(void);
 
 int fr_fb_presenter_open(fr_fb_presenter_t *presenter, const char *path);
 int fr_fb_presenter_present(fr_fb_presenter_t *presenter,

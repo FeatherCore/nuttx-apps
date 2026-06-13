@@ -14,14 +14,18 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
 #include <nuttx/video/fb.h>
+#include <nuttx/nx/nxglib.h>
 
 #include <frender/frender.h>
+
+#include "fr_backend.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -101,49 +105,22 @@ static bool fr_rect_intersect(const fr_rect_t *a, const fr_rect_t *b,
   return true;
 }
 
-static uint8_t fr_blend_u8(uint8_t src, uint8_t dst, uint8_t alpha)
+static bool fr_source_valid(const fr_surface_t *surface,
+                             const fr_rect_t *rect)
 {
-  uint16_t value;
+  int32_t x2;
+  int32_t y2;
 
-  value = (uint16_t)src * alpha + (uint16_t)dst * (255 - alpha) + 127;
-  return (uint8_t)(value / 255);
-}
-
-static int32_t fr_abs_i32(int32_t value)
-{
-  return value < 0 ? -value : value;
-}
-
-static uint32_t fr_color_blend_rgba8888(fr_color_t color, uint32_t dst)
-{
-  uint8_t dst_r;
-  uint8_t dst_g;
-  uint8_t dst_b;
-  uint8_t dst_a;
-  uint8_t out_a;
-
-  if (color.a == 255)
+  if (!fr_surface_valid(surface) || rect == NULL ||
+      rect->w == 0 || rect->h == 0 ||
+      rect->x < 0 || rect->y < 0)
     {
-      return ((uint32_t)color.r << 24) | ((uint32_t)color.g << 16) |
-             ((uint32_t)color.b << 8) | color.a;
+      return false;
     }
 
-  if (color.a == 0)
-    {
-      return dst;
-    }
-
-  dst_r = (uint8_t)(dst >> 24);
-  dst_g = (uint8_t)(dst >> 16);
-  dst_b = (uint8_t)(dst >> 8);
-  dst_a = (uint8_t)dst;
-  out_a = (uint8_t)(color.a + (((uint16_t)dst_a * (255 - color.a) +
-                                127) / 255));
-
-  return ((uint32_t)fr_blend_u8(color.r, dst_r, color.a) << 24) |
-         ((uint32_t)fr_blend_u8(color.g, dst_g, color.a) << 16) |
-         ((uint32_t)fr_blend_u8(color.b, dst_b, color.a) << 8) |
-         out_a;
+  x2 = (int32_t)rect->x + rect->w;
+  y2 = (int32_t)rect->y + rect->h;
+  return x2 <= surface->width && y2 <= surface->height;
 }
 
 static int fr_command_append(fr_command_list_t *list,
@@ -163,720 +140,6 @@ static int fr_command_append(fr_command_list_t *list,
   list->commands[list->count] = *command;
   list->count++;
   return 0;
-}
-
-static int fr_fill_rect_clipped(fr_surface_t *surface, const fr_rect_t *clip,
-                                const fr_rect_t *rect, fr_color_t color)
-{
-  fr_rect_t bounds;
-  fr_rect_t clipped;
-  uint32_t *pixels;
-  uint32_t *row;
-  uint16_t x;
-  uint16_t y;
-
-  bounds = fr_surface_bounds(surface);
-  if (!fr_rect_intersect(&bounds, rect, &clipped) ||
-      !fr_rect_intersect(clip, &clipped, &clipped))
-    {
-      return 0;
-    }
-
-  pixels = (uint32_t *)surface->pixels;
-
-  for (y = 0; y < clipped.h; y++)
-    {
-      row = pixels + ((uint32_t)(clipped.y + y) * surface->stride) +
-            clipped.x;
-
-      for (x = 0; x < clipped.w; x++)
-        {
-          row[x] = fr_color_blend_rgba8888(color, row[x]);
-        }
-    }
-
-  return 0;
-}
-
-static int fr_stroke_rect_clipped(fr_surface_t *surface, const fr_rect_t *clip,
-                                  const fr_rect_t *rect, uint16_t thickness,
-                                  fr_color_t color)
-{
-  fr_rect_t part;
-  int ret;
-
-  if (rect->w == 0 || rect->h == 0 || thickness == 0)
-    {
-      return 0;
-    }
-
-  if (thickness > rect->w)
-    {
-      thickness = rect->w;
-    }
-
-  if (thickness > rect->h)
-    {
-      thickness = rect->h;
-    }
-
-  part.x = rect->x;
-  part.y = rect->y;
-  part.w = rect->w;
-  part.h = thickness;
-  ret = fr_fill_rect_clipped(surface, clip, &part, color);
-  if (ret < 0)
-    {
-      return ret;
-    }
-
-  part.y = (int16_t)(rect->y + rect->h - thickness);
-  ret = fr_fill_rect_clipped(surface, clip, &part, color);
-  if (ret < 0)
-    {
-      return ret;
-    }
-
-  part.x = rect->x;
-  part.y = rect->y;
-  part.w = thickness;
-  part.h = rect->h;
-  ret = fr_fill_rect_clipped(surface, clip, &part, color);
-  if (ret < 0)
-    {
-      return ret;
-    }
-
-  part.x = (int16_t)(rect->x + rect->w - thickness);
-  return fr_fill_rect_clipped(surface, clip, &part, color);
-}
-
-static bool fr_quad_edge_intersect_y(const fr_point_t *a,
-                                     const fr_point_t *b,
-                                     int32_t y, int32_t *x)
-{
-  int32_t dy;
-
-  if (a == NULL || b == NULL || x == NULL)
-    {
-      return false;
-    }
-
-  if (a->y == b->y)
-    {
-      return false;
-    }
-
-  if ((y < a->y && y < b->y) || (y >= a->y && y >= b->y))
-    {
-      return false;
-    }
-
-  dy = (int32_t)b->y - a->y;
-  *x = a->x + (((int32_t)b->x - a->x) * (y - a->y)) / dy;
-  return true;
-}
-
-static int fr_fill_quad_clipped(fr_surface_t *surface, const fr_rect_t *clip,
-                                const fr_quad_t *quad, fr_color_t color)
-{
-  fr_rect_t line;
-  int32_t min_y;
-  int32_t max_y;
-  int32_t xs[4];
-  int32_t left;
-  int32_t right;
-  int32_t y;
-  uint8_t count;
-  uint8_t i;
-  uint8_t j;
-  int ret;
-
-  if (quad == NULL)
-    {
-      return -EINVAL;
-    }
-
-  min_y = quad->points[0].y;
-  max_y = quad->points[0].y;
-  for (i = 1; i < 4; i++)
-    {
-      if (quad->points[i].y < min_y)
-        {
-          min_y = quad->points[i].y;
-        }
-
-      if (quad->points[i].y > max_y)
-        {
-          max_y = quad->points[i].y;
-        }
-    }
-
-  for (y = min_y; y <= max_y; y++)
-    {
-      count = 0;
-      for (i = 0; i < 4; i++)
-        {
-          j = (uint8_t)((i + 1) & 3);
-          if (fr_quad_edge_intersect_y(&quad->points[i], &quad->points[j],
-                                       y, &xs[count]))
-            {
-              count++;
-            }
-        }
-
-      if (count < 2)
-        {
-          continue;
-        }
-
-      left = xs[0];
-      right = xs[0];
-      for (i = 1; i < count; i++)
-        {
-          if (xs[i] < left)
-            {
-              left = xs[i];
-            }
-
-          if (xs[i] > right)
-            {
-              right = xs[i];
-            }
-        }
-
-      if (right < left)
-        {
-          int32_t tmp;
-
-          tmp = left;
-          left = right;
-          right = tmp;
-        }
-
-      line.x = (int16_t)left;
-      line.y = (int16_t)y;
-      line.w = (uint16_t)(right - left + 1);
-      line.h = 1;
-
-      ret = fr_fill_rect_clipped(surface, clip, &line, color);
-      if (ret < 0)
-        {
-          return ret;
-        }
-    }
-
-  return 0;
-}
-
-static int fr_fill_triangle_clipped(fr_surface_t *surface,
-                                    const fr_rect_t *clip,
-                                    const fr_triangle_t *triangle,
-                                    fr_color_t color)
-{
-  fr_rect_t line;
-  int32_t min_y;
-  int32_t max_y;
-  int32_t xs[3];
-  int32_t left;
-  int32_t right;
-  int32_t y;
-  uint8_t count;
-  uint8_t i;
-  uint8_t j;
-  int ret;
-
-  if (triangle == NULL)
-    {
-      return -EINVAL;
-    }
-
-  min_y = triangle->points[0].y;
-  max_y = triangle->points[0].y;
-  for (i = 1; i < 3; i++)
-    {
-      if (triangle->points[i].y < min_y)
-        {
-          min_y = triangle->points[i].y;
-        }
-
-      if (triangle->points[i].y > max_y)
-        {
-          max_y = triangle->points[i].y;
-        }
-    }
-
-  for (y = min_y; y <= max_y; y++)
-    {
-      count = 0;
-      for (i = 0; i < 3; i++)
-        {
-          j = (uint8_t)((i + 1) % 3);
-          if (fr_quad_edge_intersect_y(&triangle->points[i],
-                                       &triangle->points[j], y,
-                                       &xs[count]))
-            {
-              count++;
-            }
-        }
-
-      if (count < 2)
-        {
-          continue;
-        }
-
-      left = xs[0];
-      right = xs[0];
-      for (i = 1; i < count; i++)
-        {
-          if (xs[i] < left)
-            {
-              left = xs[i];
-            }
-
-          if (xs[i] > right)
-            {
-              right = xs[i];
-            }
-        }
-
-      if (right < left)
-        {
-          int32_t tmp;
-
-          tmp = left;
-          left = right;
-          right = tmp;
-        }
-
-      line.x = (int16_t)left;
-      line.y = (int16_t)y;
-      line.w = (uint16_t)(right - left + 1);
-      line.h = 1;
-
-      ret = fr_fill_rect_clipped(surface, clip, &line, color);
-      if (ret < 0)
-        {
-          return ret;
-        }
-    }
-
-  return 0;
-}
-
-static int fr_stroke_line_clipped(fr_surface_t *surface,
-                                  const fr_rect_t *clip,
-                                  const fr_point_t *a,
-                                  const fr_point_t *b,
-                                  uint16_t thickness,
-                                  fr_color_t color)
-{
-  fr_rect_t dot;
-  int32_t dx;
-  int32_t dy;
-  int32_t err;
-  int32_t e2;
-  int32_t sx;
-  int32_t sy;
-  int32_t x;
-  int32_t y;
-  int32_t half;
-  int ret;
-
-  if (a == NULL || b == NULL || thickness == 0)
-    {
-      return -EINVAL;
-    }
-
-  x = a->x;
-  y = a->y;
-  dx = fr_abs_i32((int32_t)b->x - a->x);
-  dy = -fr_abs_i32((int32_t)b->y - a->y);
-  sx = a->x < b->x ? 1 : -1;
-  sy = a->y < b->y ? 1 : -1;
-  err = dx + dy;
-  half = thickness / 2;
-
-  while (true)
-    {
-      dot.x = (int16_t)(x - half);
-      dot.y = (int16_t)(y - half);
-      dot.w = thickness;
-      dot.h = thickness;
-
-      ret = fr_fill_rect_clipped(surface, clip, &dot, color);
-      if (ret < 0)
-        {
-          return ret;
-        }
-
-      if (x == b->x && y == b->y)
-        {
-          break;
-        }
-
-      e2 = err * 2;
-      if (e2 >= dy)
-        {
-          err += dy;
-          x += sx;
-        }
-
-      if (e2 <= dx)
-        {
-          err += dx;
-          y += sy;
-        }
-    }
-
-  return 0;
-}
-
-static int fr_stroke_quad_clipped(fr_surface_t *surface,
-                                  const fr_rect_t *clip,
-                                  const fr_quad_t *quad,
-                                  uint16_t thickness,
-                                  fr_color_t color)
-{
-  uint8_t i;
-  uint8_t next;
-  int ret;
-
-  if (quad == NULL || thickness == 0)
-    {
-      return -EINVAL;
-    }
-
-  for (i = 0; i < 4; i++)
-    {
-      next = (uint8_t)((i + 1) & 3);
-      ret = fr_stroke_line_clipped(surface, clip,
-                                   &quad->points[i],
-                                   &quad->points[next],
-                                   thickness, color);
-      if (ret < 0)
-        {
-          return ret;
-        }
-    }
-
-  return 0;
-}
-
-static bool fr_source_rect_valid(const fr_surface_t *surface,
-                                 const fr_rect_t *rect)
-{
-  int32_t x2;
-  int32_t y2;
-
-  if (!fr_surface_valid(surface) || rect == NULL || rect->w == 0 ||
-      rect->h == 0 || rect->x < 0 || rect->y < 0)
-    {
-      return false;
-    }
-
-  x2 = (int32_t)rect->x + rect->w;
-  y2 = (int32_t)rect->y + rect->h;
-  return x2 <= surface->width && y2 <= surface->height;
-}
-
-static int fr_blit_clipped(fr_surface_t *surface, const fr_rect_t *clip,
-                           const fr_surface_t *source,
-                           const fr_rect_t *src_rect,
-                           const fr_rect_t *dst_rect,
-                           uint8_t global_alpha)
-{
-  const uint32_t *src_pixels;
-  uint32_t *dst_pixels;
-  uint32_t *dst_row;
-  fr_color_t color;
-  fr_rect_t bounds;
-  fr_rect_t clipped;
-  uint32_t src_pixel;
-  uint16_t x;
-  uint16_t y;
-  int32_t dst_x;
-  int32_t dst_y;
-  int32_t src_x;
-  int32_t src_y;
-
-  if (!fr_surface_valid(surface) || !fr_source_rect_valid(source, src_rect) ||
-      dst_rect == NULL || dst_rect->w == 0 || dst_rect->h == 0)
-    {
-      return -EINVAL;
-    }
-
-  bounds = fr_surface_bounds(surface);
-  if (!fr_rect_intersect(&bounds, dst_rect, &clipped) ||
-      !fr_rect_intersect(clip, &clipped, &clipped))
-    {
-      return 0;
-    }
-
-  src_pixels = (const uint32_t *)source->pixels;
-  dst_pixels = (uint32_t *)surface->pixels;
-
-  for (y = 0; y < clipped.h; y++)
-    {
-      dst_y = clipped.y + y;
-      src_y = src_rect->y +
-              (((dst_y - dst_rect->y) * (int32_t)src_rect->h) /
-               dst_rect->h);
-      dst_row = dst_pixels + ((uint32_t)dst_y * surface->stride) +
-                clipped.x;
-
-      for (x = 0; x < clipped.w; x++)
-        {
-          dst_x = clipped.x + x;
-          src_x = src_rect->x +
-                  (((dst_x - dst_rect->x) * (int32_t)src_rect->w) /
-                   dst_rect->w);
-          src_pixel = src_pixels[((uint32_t)src_y * source->stride) +
-                                 src_x];
-
-          color.r = (uint8_t)(src_pixel >> 24);
-          color.g = (uint8_t)(src_pixel >> 16);
-          color.b = (uint8_t)(src_pixel >> 8);
-          color.a = (uint8_t)src_pixel;
-          color.a = (uint8_t)(((uint16_t)color.a * global_alpha + 127) /
-                              255);
-          dst_row[x] = fr_color_blend_rgba8888(color, dst_row[x]);
-        }
-    }
-
-  return 0;
-}
-
-static int fr_blit_quad_clipped(fr_surface_t *surface, const fr_rect_t *clip,
-                                const fr_surface_t *source,
-                                const fr_rect_t *src_rect,
-                                const fr_quad_t *dst_quad,
-                                uint8_t global_alpha)
-{
-  const uint32_t *src_pixels;
-  uint32_t *dst_pixels;
-  fr_color_t color;
-  fr_rect_t bounds;
-  int32_t min_y;
-  int32_t max_y;
-  int32_t xs[4];
-  int32_t left;
-  int32_t right;
-  int32_t src_x;
-  int32_t src_y;
-  int32_t y_span;
-  int32_t x_span;
-  uint32_t src_pixel;
-  uint8_t count;
-  uint8_t i;
-  uint8_t j;
-  int32_t x;
-  int32_t y;
-
-  if (!fr_surface_valid(surface) ||
-      !fr_source_rect_valid(source, src_rect) || dst_quad == NULL)
-    {
-      return -EINVAL;
-    }
-
-  src_pixels = (const uint32_t *)source->pixels;
-  dst_pixels = (uint32_t *)surface->pixels;
-  bounds = fr_surface_bounds(surface);
-  min_y = dst_quad->points[0].y;
-  max_y = dst_quad->points[0].y;
-  for (i = 1; i < 4; i++)
-    {
-      if (dst_quad->points[i].y < min_y)
-        {
-          min_y = dst_quad->points[i].y;
-        }
-
-      if (dst_quad->points[i].y > max_y)
-        {
-          max_y = dst_quad->points[i].y;
-        }
-    }
-
-  y_span = max_y - min_y;
-  if (y_span <= 0)
-    {
-      y_span = 1;
-    }
-
-  for (y = min_y; y <= max_y; y++)
-    {
-      count = 0;
-      for (i = 0; i < 4; i++)
-        {
-          j = (uint8_t)((i + 1) & 3);
-          if (fr_quad_edge_intersect_y(&dst_quad->points[i],
-                                       &dst_quad->points[j], y,
-                                       &xs[count]))
-            {
-              count++;
-            }
-        }
-
-      if (count < 2 || y < bounds.y || y >= (int32_t)bounds.y + bounds.h ||
-          y < clip->y || y >= (int32_t)clip->y + clip->h)
-        {
-          continue;
-        }
-
-      left = xs[0];
-      right = xs[0];
-      for (i = 1; i < count; i++)
-        {
-          if (xs[i] < left)
-            {
-              left = xs[i];
-            }
-
-          if (xs[i] > right)
-            {
-              right = xs[i];
-            }
-        }
-
-      if (right < left)
-        {
-          int32_t tmp;
-
-          tmp = left;
-          left = right;
-          right = tmp;
-        }
-
-      if (left < bounds.x)
-        {
-          left = bounds.x;
-        }
-
-      if (left < clip->x)
-        {
-          left = clip->x;
-        }
-
-      if (right >= (int32_t)bounds.x + bounds.w)
-        {
-          right = (int32_t)bounds.x + bounds.w - 1;
-        }
-
-      if (right >= (int32_t)clip->x + clip->w)
-        {
-          right = (int32_t)clip->x + clip->w - 1;
-        }
-
-      x_span = right - left;
-      if (x_span <= 0)
-        {
-          x_span = 1;
-        }
-
-      src_y = src_rect->y +
-              (((y - min_y) * (int32_t)(src_rect->h - 1)) / y_span);
-      for (x = left; x <= right; x++)
-        {
-          src_x = src_rect->x +
-                  (((x - left) * (int32_t)(src_rect->w - 1)) / x_span);
-          src_pixel = src_pixels[((uint32_t)src_y * source->stride) +
-                                 src_x];
-
-          color.r = (uint8_t)(src_pixel >> 24);
-          color.g = (uint8_t)(src_pixel >> 16);
-          color.b = (uint8_t)(src_pixel >> 8);
-          color.a = (uint8_t)src_pixel;
-          color.a = (uint8_t)(((uint16_t)color.a * global_alpha + 127) /
-                              255);
-          dst_pixels[((uint32_t)y * surface->stride) + x] =
-            fr_color_blend_rgba8888(
-              color, dst_pixels[((uint32_t)y * surface->stride) + x]);
-        }
-    }
-
-  return 0;
-}
-
-static uint16_t fr_color_to_rgb565(uint32_t rgba)
-{
-  uint8_t r;
-  uint8_t g;
-  uint8_t b;
-
-  r = (uint8_t)(rgba >> 24);
-  g = (uint8_t)(rgba >> 16);
-  b = (uint8_t)(rgba >> 8);
-
-  return (uint16_t)(((uint16_t)(r & 0xf8) << 8) |
-                    ((uint16_t)(g & 0xfc) << 3) |
-                    ((uint16_t)b >> 3));
-}
-
-static uint32_t fr_color_to_rgb32(uint32_t rgba)
-{
-  uint8_t r;
-  uint8_t g;
-  uint8_t b;
-
-  r = (uint8_t)(rgba >> 24);
-  g = (uint8_t)(rgba >> 16);
-  b = (uint8_t)(rgba >> 8);
-
-  return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-}
-
-static uint32_t fr_color_to_rgba32(uint32_t rgba)
-{
-  uint8_t r;
-  uint8_t g;
-  uint8_t b;
-  uint8_t a;
-
-  r = (uint8_t)(rgba >> 24);
-  g = (uint8_t)(rgba >> 16);
-  b = (uint8_t)(rgba >> 8);
-  a = (uint8_t)rgba;
-
-  return ((uint32_t)a << 24) | ((uint32_t)r << 16) |
-         ((uint32_t)g << 8) | b;
-}
-
-static int fr_fb_present_pixel(uint8_t *dst, uint8_t fmt, uint32_t rgba)
-{
-  switch (fmt)
-    {
-      case FB_FMT_RGB16_565:
-        *((uint16_t *)dst) = fr_color_to_rgb565(rgba);
-        return 0;
-
-      case FB_FMT_RGB24:
-        dst[0] = (uint8_t)(rgba >> 24);
-        dst[1] = (uint8_t)(rgba >> 16);
-        dst[2] = (uint8_t)(rgba >> 8);
-        return 0;
-
-      case FB_FMT_RGB32:
-      case FB_FMT_RGBT32:
-        *((uint32_t *)dst) = fr_color_to_rgb32(rgba);
-        return 0;
-
-      case FB_FMT_RGBA32:
-        *((uint32_t *)dst) = fr_color_to_rgba32(rgba);
-        return 0;
-
-      default:
-        return -ENOSYS;
-    }
-}
-
-static uint8_t fr_fb_bytes_per_pixel(const fr_fb_presenter_t *presenter)
-{
-  if (presenter->bpp == 0)
-    {
-      return 0;
-    }
-
-  return (uint8_t)((presenter->bpp + 7) / 8);
 }
 
 static uint32_t fr_fb_format_caps(uint8_t fmt)
@@ -1148,7 +411,7 @@ int fr_cmd_blit_alpha(fr_command_list_t *list, const fr_surface_t *source,
 {
   fr_command_t command;
 
-  if (!fr_source_rect_valid(source, src_rect) || dst_rect == NULL ||
+  if (!fr_source_valid(source, src_rect) || dst_rect == NULL ||
       dst_rect->w == 0 || dst_rect->h == 0)
     {
       return -EINVAL;
@@ -1172,7 +435,7 @@ int fr_cmd_blit_quad_alpha(fr_command_list_t *list,
 {
   fr_command_t command;
 
-  if (!fr_source_rect_valid(source, src_rect) || dst_quad == NULL)
+  if (!fr_source_valid(source, src_rect) || dst_quad == NULL)
     {
       return -EINVAL;
     }
@@ -1738,23 +1001,24 @@ const fr_backend_caps_t *fr_backend_registry_find(const char *name)
   return NULL;
 }
 
-int fr_execute_software(fr_surface_t *surface,
-                        const fr_command_list_t *list)
+int fr_execute(fr_backend_instance_t *backend,
+               const fr_command_list_t *list)
 {
   fr_rect_t clip_stack[FR_CLIP_STACK_DEPTH];
   fr_rect_t current_clip;
-  fr_rect_t bounds;
   uint8_t clip_depth;
   uint16_t i;
   int ret;
 
-  if (!fr_surface_valid(surface) || list == NULL || list->commands == NULL)
+  if (backend == NULL || backend->ops == NULL ||
+      list == NULL || list->commands == NULL)
     {
       return -EINVAL;
     }
 
-  bounds = fr_surface_bounds(surface);
-  current_clip = bounds;
+  /* Get initial clip rect from the backend's render bounds */
+
+  current_clip = backend->ops->get_bounds(backend->priv);
   clip_depth = 0;
 
   for (i = 0; i < list->count; i++)
@@ -1764,51 +1028,60 @@ int fr_execute_software(fr_surface_t *surface,
       switch (command->kind)
         {
           case FR_CMD_CLEAR:
-            ret = fr_fill_rect_clipped(surface, &current_clip, &bounds,
-                                       command->color);
-            break;
-
-          case FR_CMD_FILL_RECT:
-            ret = fr_fill_rect_clipped(surface, &current_clip,
-                                       &command->rect, command->color);
-            break;
-
-          case FR_CMD_STROKE_RECT:
-            ret = fr_stroke_rect_clipped(surface, &current_clip,
-                                         &command->rect, command->thickness,
-                                         command->color);
-            break;
-
-          case FR_CMD_FILL_QUAD:
-            ret = fr_fill_quad_clipped(surface, &current_clip,
-                                       &command->quad, command->color);
-            break;
-
-          case FR_CMD_FILL_TRIANGLE:
-            ret = fr_fill_triangle_clipped(surface, &current_clip,
-                                          &command->triangle,
+            ret = backend->ops->cmd_clear(backend->priv, &current_clip,
                                           command->color);
             break;
 
+          case FR_CMD_FILL_RECT:
+            ret = backend->ops->cmd_fill_rect(backend->priv, &current_clip,
+                                              &command->rect,
+                                              command->color);
+            break;
+
+          case FR_CMD_STROKE_RECT:
+            ret = backend->ops->cmd_stroke_rect(backend->priv,
+                                                &current_clip,
+                                                &command->rect,
+                                                command->thickness,
+                                                command->color);
+            break;
+
+          case FR_CMD_FILL_QUAD:
+            ret = backend->ops->cmd_fill_quad(backend->priv, &current_clip,
+                                              &command->quad,
+                                              command->color);
+            break;
+
+          case FR_CMD_FILL_TRIANGLE:
+            ret = backend->ops->cmd_fill_triangle(backend->priv,
+                                                  &current_clip,
+                                                  &command->triangle,
+                                                  command->color);
+            break;
+
           case FR_CMD_STROKE_QUAD:
-            ret = fr_stroke_quad_clipped(surface, &current_clip,
-                                         &command->quad,
-                                         command->thickness,
-                                         command->color);
+            ret = backend->ops->cmd_stroke_quad(backend->priv,
+                                                &current_clip,
+                                                &command->quad,
+                                                command->thickness,
+                                                command->color);
             break;
 
           case FR_CMD_BLIT:
-            ret = fr_blit_clipped(surface, &current_clip,
-                                  &command->source, &command->src_rect,
-                                  &command->rect, command->global_alpha);
+            ret = backend->ops->cmd_blit(backend->priv, &current_clip,
+                                         &command->source,
+                                         &command->src_rect,
+                                         &command->rect,
+                                         command->global_alpha);
             break;
 
           case FR_CMD_BLIT_QUAD:
-            ret = fr_blit_quad_clipped(surface, &current_clip,
-                                       &command->source,
-                                       &command->src_rect,
-                                       &command->quad,
-                                       command->global_alpha);
+            ret = backend->ops->cmd_blit_quad(backend->priv,
+                                              &current_clip,
+                                              &command->source,
+                                              &command->src_rect,
+                                              &command->quad,
+                                              command->global_alpha);
             break;
 
           case FR_CMD_PUSH_CLIP:
@@ -1853,7 +1126,56 @@ int fr_execute_software(fr_surface_t *surface,
         }
     }
 
+  /* Call present after all commands */
+
+  if (backend->ops->present != NULL)
+    {
+      ret = backend->ops->present(backend->priv, NULL);
+      if (ret < 0)
+        {
+          return ret;
+        }
+    }
+
   return list->overflowed ? -ENOSPC : 0;
+}
+
+int fr_backend_open(fr_backend_instance_t *backend, const char *name,
+                    const void *config)
+{
+  int ret;
+  if (backend == NULL || name == NULL) return -EINVAL;
+
+  if (strcmp(name, "framebuffer") == 0)
+    backend->ops = fr_backend_ops_framebuffer();
+  else
+    return -ENOSYS;
+
+  if (backend->ops == NULL)
+    {
+      printf("fr_backend_open: framebuffer ops not registered\n");
+      return -ENOSYS;
+    }
+
+  ret = backend->ops->open(&backend->priv, config);
+  return ret;
+}
+
+void fr_backend_close(fr_backend_instance_t *backend)
+{
+  if (backend && backend->ops && backend->priv)
+    backend->ops->close(backend->priv);
+}
+
+int fr_backend_get_bounds(fr_backend_instance_t *backend,
+                          fr_rect_t *bounds)
+{
+  if (backend == NULL || backend->ops == NULL ||
+      backend->priv == NULL || bounds == NULL)
+    return -EINVAL;
+
+  *bounds = backend->ops->get_bounds(backend->priv);
+  return 0;
 }
 
 int fr_fb_presenter_open(fr_fb_presenter_t *presenter, const char *path)
@@ -1953,63 +1275,33 @@ int fr_fb_presenter_present_rect(fr_fb_presenter_t *presenter,
                                  const fr_rect_t *rect)
 {
 #if defined(CONFIG_VIDEO_FB) && defined(CONFIG_GRAPHICS_FRENDER_FB_PRESENT)
-  fr_rect_t bounds;
-  fr_rect_t fbounds;
-  fr_rect_t clipped;
-  const uint32_t *src_pixels;
-  const uint32_t *src_row;
-  uint8_t *dst_row;
-  uint8_t *dst;
-  uint8_t bpp;
-  uint16_t x;
-  uint16_t y;
-  int ret;
+  struct nxgl_rect_s dest;
+  int bpp;
 
   if (presenter == NULL || !presenter->open || presenter->fbmem == NULL ||
       !fr_surface_valid(surface) || rect == NULL)
-    {
-      return -EINVAL;
-    }
+    return -EINVAL;
 
-  bpp = fr_fb_bytes_per_pixel(presenter);
-  if (bpp == 0)
-    {
-      return -EINVAL;
-    }
+  bpp = (int)presenter->bpp;
+  if (bpp == 0) bpp = 32;
 
-  bounds = fr_surface_bounds(surface);
-  fbounds.x = 0;
-  fbounds.y = 0;
-  fbounds.w = presenter->xres;
-  fbounds.h = presenter->yres;
+  {
+    struct fb_planeinfo_s pinfo;
+    memset(&pinfo, 0, sizeof(pinfo));
+    pinfo.fbmem = presenter->fbmem;
+    pinfo.stride = (fb_coord_t)presenter->stride;
+    pinfo.bpp = presenter->bpp;
 
-  if (!fr_rect_intersect(&bounds, rect, &clipped) ||
-      !fr_rect_intersect(&fbounds, &clipped, &clipped))
-    {
-      return 0;
-    }
+    dest.pt1.x = rect->x; dest.pt1.y = rect->y;
+    dest.pt2.x = rect->x + rect->w - 1;
+    dest.pt2.y = rect->y + rect->h - 1;
 
-  src_pixels = (const uint32_t *)surface->pixels;
-
-  for (y = 0; y < clipped.h; y++)
-    {
-      src_row = src_pixels +
-                ((uint32_t)(clipped.y + y) * surface->stride) + clipped.x;
-      dst_row = (uint8_t *)presenter->fbmem +
-                ((uint32_t)(clipped.y + y) * presenter->stride) +
-                ((uint32_t)clipped.x * bpp);
-
-      for (x = 0; x < clipped.w; x++)
-        {
-          dst = dst_row + ((uint32_t)x * bpp);
-          ret = fr_fb_present_pixel(dst, presenter->fmt, src_row[x]);
-          if (ret < 0)
-            {
-              return ret;
-            }
-        }
-    }
-
+    nxgl_blit_scale(&pinfo, &dest,
+                       surface->pixels,
+                       (int)surface->width, (int)surface->height,
+                       (int)surface->stride,
+                       bpp, 255);
+  }
   return 0;
 #else
   return -ENOSYS;

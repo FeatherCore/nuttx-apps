@@ -64,7 +64,7 @@ int wing_gui_blit_quad_alpha(wing_context_t *ctx,
                              uint8_t global_alpha);
 int wing_gui_draw_rect(wing_context_t *ctx, const wing_rect_t *rect,
                        uint16_t thickness, wing_color_t color);
-int wing_gui_flush_frender_software(wing_gui_t *gui);
+int wing_gui_flush(wing_gui_t *gui, fr_backend_instance_t *backend);
 uint16_t wing_gui_render_command_count(const wing_gui_t *gui);
 uint32_t wing_surface_checksum_rgba8888(const wing_surface_t *surface);
 int wing_gui_render_dirty(wing_gui_t *gui);
