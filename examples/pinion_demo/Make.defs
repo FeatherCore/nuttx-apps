@@ -1,0 +1,10 @@
+############################################################################
+# apps/examples/pinion_demo/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_EXAMPLES_PINION_DEMO),)
+CONFIGURED_APPS += $(APPDIR)/examples/pinion_demo
+endif

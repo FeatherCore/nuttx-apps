@@ -1,0 +1,13 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+menuconfig GRAPHICS_PINION
+	bool "Pinion game engine"
+	default n
+	---help---
+		Enable the Pinion lightweight game engine as an apps-side graphics
+		library.  Pinion is intended to build on the NuttX graphics
+		foundation with game-oriented frame timing, surfaces, sprites,
+		tilemaps, input routing, and scene/ECS integration.

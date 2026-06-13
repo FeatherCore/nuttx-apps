@@ -1,0 +1,16 @@
+############################################################################
+# apps/graphics/pinion/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_GRAPHICS_PINION),)
+CONFIGURED_APPS += $(APPDIR)/graphics/pinion
+
+# Public Pinion headers:
+#   #include <pinion/pinion.h>
+
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/graphics/pinion/include
+CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/graphics/pinion/include
+endif
