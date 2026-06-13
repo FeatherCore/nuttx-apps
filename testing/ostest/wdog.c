@@ -29,6 +29,7 @@
 #include <nuttx/wdog.h>
 #include <nuttx/spinlock.h>
 
+#include <stdint.h>
 #include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -56,7 +57,7 @@
 typedef struct wdtest_param_s
 {
   FAR struct wdog_s *wdog;
-  sclock_t           interval;
+  int64_t            interval;
   uint64_t           callback_cnt;
   clock_t            triggered_tick;
 } wdtest_param_t;
@@ -79,7 +80,7 @@ static void wdtest_callback(wdparm_t param)
   wdtest_param->callback_cnt   += 1;
 }
 
-static void wdtest_checkdelay(sclock_t diff, sclock_t delay_tick)
+static void wdtest_checkdelay(int64_t diff, int64_t delay_tick)
 {
   /* Ensure the watchdog trigger time is not earlier than expected. */
 
@@ -97,13 +98,13 @@ static void wdtest_checkdelay(sclock_t diff, sclock_t delay_tick)
 }
 
 static void wdtest_once(FAR struct wdog_s *wdog, FAR wdtest_param_t *param,
-                        sclock_t delay_ns)
+                        int64_t delay_ns)
 {
   uint64_t   cnt;
-  sclock_t   diff;
+  int64_t     diff;
   clock_t    wdset_tick;
   irqstate_t flags;
-  sclock_t   delay_tick = (sclock_t)NSEC2TICK((clock_t)delay_ns);
+  int64_t   delay_tick = (int64_t)NSEC2TICK((clock_t)delay_ns);
 
   wdtest_printf("wdtest_once %lld ns\n", (long long)delay_ns);
 
@@ -133,20 +134,20 @@ static void wdtest_once(FAR struct wdog_s *wdog, FAR wdtest_param_t *param,
 
   /* Check if the delay is within the acceptable tolerance. */
 
-  diff = (sclock_t)(param->triggered_tick - wdset_tick);
+  diff = (int64_t)(param->triggered_tick - wdset_tick);
 
   wdtest_checkdelay(diff, delay_tick);
 }
 
 static void wdtest_rand(FAR struct wdog_s *wdog, FAR wdtest_param_t *param,
-                        sclock_t rand_ns)
+                        int64_t rand_ns)
 {
   uint64_t   cnt;
   int        idx;
-  sclock_t   delay_ns;
+  int64_t   delay_ns;
   clock_t    wdset_tick;
-  sclock_t   delay_tick;
-  sclock_t   diff;
+  int64_t   delay_tick;
+  int64_t   diff;
   irqstate_t flags = 0;
 
   /* Perform multiple iterations with random delays. */
@@ -190,7 +191,7 @@ static void wdtest_rand(FAR struct wdog_s *wdog, FAR wdtest_param_t *param,
 
           if (cnt % 2)
             {
-              diff = (sclock_t)(param->triggered_tick - wdset_tick);
+              diff = (int64_t)(param->triggered_tick - wdset_tick);
               wdtest_checkdelay(diff, delay_tick);
             }
         }
@@ -204,7 +205,7 @@ static void wdtest_rand(FAR struct wdog_s *wdog, FAR wdtest_param_t *param,
 static void wdtest_callback_recursive(wdparm_t param)
 {
   FAR wdtest_param_t *wdtest_param = (FAR wdtest_param_t *)param;
-  sclock_t            interval     = wdtest_param->interval;
+              int64_t             interval     = wdtest_param->interval;
 
   wdtest_param->callback_cnt   += 1;
   wdtest_param->triggered_tick  = clock_systime_ticks();
@@ -215,7 +216,7 @@ static void wdtest_callback_recursive(wdparm_t param)
 
 static void wdtest_recursive(FAR struct wdog_s *wdog,
                              FAR wdtest_param_t *param,
-                             sclock_t delay_ns,
+                             int64_t delay_ns,
                              unsigned int times)
 {
   uint64_t cnt;
@@ -227,7 +228,7 @@ static void wdtest_recursive(FAR struct wdog_s *wdog,
   cnt = param->callback_cnt;
 
   param->wdog = wdog;
-  param->interval = (sclock_t)NSEC2TICK((clock_t)delay_ns);
+  param->interval = (int64_t)NSEC2TICK((clock_t)delay_ns);
 
   wdtest_assert(param->interval >= 0);
 
@@ -253,7 +254,7 @@ static void wdtest_recursive(FAR struct wdog_s *wdog,
 static void wdog_test_run(FAR wdtest_param_t *param)
 {
   uint64_t             cnt;
-  sclock_t             rest;
+  int64_t             rest;
   clock_t              delay;
   struct wdog_s        test_wdog =
   {
