@@ -1,0 +1,17 @@
+#ifndef BLUEZ_UPSTREAM_OBJECT_SHIMS_ATTRIB_ATT_H
+#define BLUEZ_UPSTREAM_OBJECT_SHIMS_ATTRIB_ATT_H
+
+#include "../bluetooth/uuid.h"
+#include "../../upstream/attrib/att.h"
+
+#endif
+
+#ifndef BLUEZ_UPSTREAM_OBJECT_SHIMS_ATTRIB_BT_ATT_COMPAT
+#define BLUEZ_UPSTREAM_OBJECT_SHIMS_ATTRIB_BT_ATT_COMPAT
+#define BT_ATT_PSM 0x001f
+#define BT_ATT_CID 0x0004
+#define BT_ATT_DEFAULT_LE_MTU ATT_DEFAULT_LE_MTU
+#define BT_ATT_DEBUG 1
+#define BT_ATT_SECURITY_LOW 1
+#define BT_ATT_SECURITY_MEDIUM 2
+#endif

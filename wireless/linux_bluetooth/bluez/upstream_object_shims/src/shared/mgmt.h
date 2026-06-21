@@ -1,0 +1,6 @@
+#ifndef BLUEZ_UPSTREAM_OBJECT_SHIMS_SRC_SHARED_MGMT_H
+#define BLUEZ_UPSTREAM_OBJECT_SHIMS_SRC_SHARED_MGMT_H
+
+#include "../../../upstream/src/shared/mgmt.h"
+
+#endif /* BLUEZ_UPSTREAM_OBJECT_SHIMS_SRC_SHARED_MGMT_H */

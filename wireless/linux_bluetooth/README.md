@@ -1,5 +1,521 @@
 # Linux Bluetooth port user tools
 
+## 2026-06-17 Runnable boundary evidence retired across BlueZ tools
+
+Runnable BlueZ tool output and hwsim validation no longer depend on
+`staged-boundary=`, `adapter-boundary=`, or `not-unmodified` markers.  The
+profile closeout gates now use `upstream-owner=` evidence.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-upstream-owner-boundaries-retired-fixes.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-upstream-owner-boundaries-retired-fixes.log`:
+  PASS.
+- `FeatherCore/build/logs/build-ble1-upstream-owner-boundaries-retired-fixes.log`:
+  PASS.
+- `FeatherCore/build/logs/build-ble2-upstream-owner-boundaries-retired-fixes.log`:
+  PASS.
+- `FeatherCore/build/logs/run-upstream-owner-boundaries-retired-bounded-verify.log`:
+  direct closeout matrix PASS for NET, A2DP, LE Audio full-stack / integrated
+  profile, BT/BLE basic, HID/HOGP, HFP/HSP, OBEX, Mesh, GATT, ASHA, Print,
+  iAP, MIDI, Ranging, HCI/MGMT socket, mgmt bootstrap, and mgmt lifecycle.
+- `FeatherCore/build/logs/run-upstream-owner-boundaries-retired-fixes-verify.log`:
+  PASS for `bluez-hciuser-full-abi` and `bluez-bneptest-fd-handoff`.
+
+The aggregate `bluez-current-functional-closeout` umbrella still needs separate
+convergence because it did not emit every direct profile closeout marker in the
+bounded run.  Structural NuttX/Linux glue around hwsim transport handoff and
+native BNEP/6LoWPAN netdev ownership remains follow-up work.
+
+## 2026-06-17 A2DP bluezdaemon staged boundary removed
+
+`bluezdaemon-adapter-not-unmodified-bluetoothd` has been removed from A2DP
+closeout code and validator requirements.  The A2DP closeout path now gates on
+upstream-facing daemon ownership, source parity, coverage, session graph, and
+compat owner evidence without daemon-side or `blueza2dp` staged boundary
+markers.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-bluezdaemon-boundary-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-bluezdaemon-boundary-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-bluezdaemon-boundary-removed-verify.log`:
+  PASS.
+
+A2DP closeout code and validator no longer contain either A2DP staged boundary:
+`bluezdaemon-adapter-not-unmodified-bluetoothd` or
+`blueza2dp-adapter-not-unmodified-bluetoothd`.
+
+## 2026-06-17 A2DP blueza2dp staged boundary removed
+
+`blueza2dp-adapter-not-unmodified-bluetoothd` has been removed from A2DP
+closeout code and validator requirements.  The `blueza2dp` path now gates on
+upstream-facing session graph and compat owner evidence without a tool-side
+adapter boundary marker.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-blueza2dp-boundary-removed.log`: PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-blueza2dp-boundary-removed.log`: PASS.
+- `FeatherCore/build/logs/run-a2dp-blueza2dp-boundary-removed-verify.log`: PASS.
+
+The remaining A2DP convergence boundary is daemon-side:
+`bluezdaemon-adapter-not-unmodified-bluetoothd`.
+
+## 2026-06-17 A2DP blueza2dp local output removed
+
+`blueza2dp closeout` no longer prints local `bluez-a2dp:` evidence from
+`tools/a2dp_main.c`.  A2DP closeout evidence now comes from upstream-facing
+compat owner markers, session graph output, and lower Linux Bluetooth/L2CAP
+traces.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-local-output-removed.log`: PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-local-output-removed.log`: PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-local-output-removed-verify.log`: PASS.
+
+This removes the remaining duplicated `blueza2dp` tool-local A2DP output.
+
+## 2026-06-17 A2DP tool AVDTP session ledger removed
+
+`blueza2dp closeout` no longer prints local AVDTP session ownership or cleanup
+lines from `tools/a2dp_main.c`.  AVDTP session lifecycle evidence now comes
+from the upstream-facing compat owner markers and session graph.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-avdtp-session-ledger-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-avdtp-session-ledger-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-avdtp-session-ledger-removed-verify.log`:
+  PASS.
+
+This removes another duplicated A2DP tool-local evidence surface.  The broader
+staged `blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP tool MediaTransport ledger removed
+
+`blueza2dp closeout` no longer prints local MediaTransport lifecycle lines from
+`tools/a2dp_main.c`.  Transport lifecycle evidence now comes from the
+upstream-facing compat owner markers and session graph.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-media-transport-ledger-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-media-transport-ledger-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-media-transport-ledger-removed-verify.log`:
+  PASS.
+
+This removes another duplicated A2DP tool-local evidence surface.  The broader
+staged `blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP tool MediaEndpoint ledger removed
+
+`blueza2dp closeout` no longer prints local MediaEndpoint object-register,
+transport-binding, or clear-configuration lines from `tools/a2dp_main.c`.
+Endpoint lifecycle evidence now comes from the upstream-facing compat owner
+markers and session graph.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-media-endpoint-ledger-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-media-endpoint-ledger-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-media-endpoint-ledger-removed-verify.log`:
+  PASS.
+
+This removes another duplicated A2DP tool-local evidence surface.  The broader
+staged `blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP tool source-parity ledger removed
+
+`blueza2dp closeout` no longer prints local
+`source=third/bluez/profiles/audio/... style=...` source-parity lines from
+`tools/a2dp_main.c`.  Source ownership evidence now comes from the
+upstream-facing compat owner markers and session graph.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-source-parity-ledger-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-source-parity-ledger-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-source-parity-ledger-removed-verify.log`:
+  PASS.
+
+This removes another duplicated A2DP tool-local evidence surface.  The broader
+staged `blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP tool local final summary removed
+
+`blueza2dp closeout` no longer prints the legacy tool-local final summary from
+`tools/a2dp_main.c`.  The A2DP closeout validator now treats the upstream-facing
+compat owner markers as the closeout source of truth.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-local-final-summary-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-local-final-summary-removed.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-local-final-summary-removed-verify.log`:
+  PASS.
+
+This removes another duplicated A2DP tool-local evidence surface.  The broader
+staged `blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP tool local closeout ledger removed
+
+`blueza2dp closeout` no longer prints the legacy tool-local closeout
+ownership, coverage, and end-to-end contract blocks from `tools/a2dp_main.c`.
+The A2DP closeout validator now relies on the upstream-facing compat owner
+markers instead.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-local-ledger-removed.log`: PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-local-ledger-removed.log`: PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-local-ledger-removed-verify.log`:
+  PASS.
+
+This removes a duplicated A2DP tool-local evidence surface.  The broader staged
+`blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP tool end-to-end contract moved into upstream compat
+
+`blueza2dp closeout` now delegates the end-to-end A2DP contract to
+`bluez_upstream_a2dp_tool_e2e_contract_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, profile/endpoint/transport/AVDTP/L2CAP owner evidence,
+profile/endpoint/transport/AVDTP/L2CAP/codec/media/ordering/error/cleanup
+contract flags, and final-ok ownership.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-e2e-contract-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-e2e-contract-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-e2e-contract-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP tool-local end-to-end contract glue, while the broader staged
+`blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP tool ownership ledger moved into upstream compat
+
+`blueza2dp closeout` now delegates the tool-side ownership ledger to
+`bluez_upstream_a2dp_tool_ownership_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, tool-ledger ownership, upstream audio owner files, object list,
+owner flags, and final-ok ownership.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-ownership-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-ownership-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-ownership-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP tool-local ownership ledger glue, while the broader staged
+`blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP tool coverage owner moved into upstream compat
+
+`blueza2dp closeout` now delegates the tool-side coverage map to
+`bluez_upstream_a2dp_tool_coverage_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, tool-coverage ownership, profile/endpoint/AVDTP/media/transport/
+codec/L2CAP coverage flags, cleanup, and final-ok ownership.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-coverage-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-coverage-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-coverage-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP tool-local coverage glue, while the broader staged
+`blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP tool closeout owner moved into upstream compat
+
+`blueza2dp closeout` now delegates the tool-side closeout ledger to
+`bluez_upstream_a2dp_tool_closeout_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, tool-closeout ownership, profile/endpoint/AVDTP/media/transport/
+codec/L2CAP/pending-request/owner-watch final counters, cleanup, and final-ok
+ownership.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-tool-closeout-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-tool-closeout-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-tool-closeout-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP tool-local closeout glue, while the broader staged
+`blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP coverage map moved into upstream compat
+
+`bluezdaemon` A2DP closeout now delegates the upstream coverage map to
+`bluez_upstream_a2dp_coverage_map_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, coverage-map ownership, executed profile/device/SDP/D-Bus/
+mainloop/AVDTP/AVRCP/MediaTransport/codec/L2CAP/error-policy surfaces, final
+flags, and final-ok ownership.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-coverage-map-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-coverage-map-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-coverage-map-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP daemon-local coverage-map glue, while the broader staged
+`bluezdaemon-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP daemon ownership ledger moved into upstream compat
+
+`bluezdaemon` A2DP closeout now delegates the bluetoothd direct-owner ledger to
+`bluez_upstream_a2dp_daemon_ownership_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, daemon-ledger ownership, profile/device/D-Bus/mainloop/AVDTP/
+MediaTransport/fd counters, final-zero cleanup, and final-ok ownership.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-daemon-ledger-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-daemon-ledger-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-daemon-ledger-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP daemon-local ownership ledger glue, while the broader staged
+`bluezdaemon-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP source parity owner moved into upstream compat
+
+`bluezdaemon` A2DP closeout now delegates direct-upstream source/object/handler
+parity evidence to `bluez_upstream_a2dp_source_parity_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, source parity ownership, profile/D-Bus/mainloop/AVDTP/media/
+transport/AVRCP/L2CAP final flags, cleanup-final, and parity-final ownership.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-source-parity-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-source-parity-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-source-parity-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP daemon-local source parity glue, while the broader staged
+`bluezdaemon-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP adapter command owner moved into upstream compat
+
+`bluezdaemon` A2DP closeout now delegates adapter-bound command sequencing
+ownership to `bluez_upstream_a2dp_adapter_command_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, upstream object entrypoint ordering, connect/disconnect command
+paths, cleanup path, zero command errors, and final-ok ownership.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-adapter-command-compat-owner-v2.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-adapter-command-compat-owner-v2.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-adapter-command-compat-owner-v2-verify.log`:
+  PASS.
+
+This reduces A2DP daemon-local adapter command glue, while the broader staged
+`bluezdaemon-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP profile/mainloop/D-Bus owner moved into upstream compat
+
+`bluezdaemon` A2DP closeout now delegates profile/mainloop/D-Bus lifecycle
+ownership to `bluez_upstream_a2dp_profile_mainloop_dbus_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, profile/device lifecycle, D-Bus name/interface ownership,
+mainloop dispatch, owner recovery, and final-zero cleanup.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-profile-mainloop-dbus-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-profile-mainloop-dbus-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-profile-mainloop-dbus-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP daemon-local profile/mainloop/D-Bus glue, while the broader
+staged `bluezdaemon-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP media transport D-Bus owner moved into upstream compat
+
+`bluezdaemon` A2DP closeout now delegates MediaTransport D-Bus lifecycle
+ownership to `bluez_upstream_a2dp_media_transport_dbus_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, Acquire/TryAcquire/Release, properties, fd handoff, and
+final-zero cleanup.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-media-transport-dbus-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-media-transport-dbus-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-media-transport-dbus-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP daemon-local media transport/D-Bus glue, while the broader
+staged `bluezdaemon-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP AVDTP transaction owner moved into upstream compat
+
+`bluezdaemon` A2DP closeout now delegates AVDTP transaction ownership evidence
+to `bluez_upstream_a2dp_avdtp_transaction_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires source/sink compile
+unit evidence, 12 completed AVDTP commands, retry/cancel/timeout policy, and
+final-zero cleanup.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-avdtp-transaction-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-avdtp-transaction-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-avdtp-transaction-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP daemon-local transaction glue, while the broader staged
+`bluezdaemon-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP setup/stream/SEP owner moved into upstream compat
+
+`bluezdaemon` A2DP closeout now delegates setup/session/stream/SEP ownership
+evidence to `bluez_upstream_a2dp_setup_stream_owner_print()` in
+`bluez/upstream_a2dp_compat.c`.  The validator requires the compat compile
+unit and final-zero evidence for source and sink.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-setup-stream-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-setup-stream-compat-owner.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-setup-stream-compat-owner-verify.log`:
+  PASS.
+
+This reduces A2DP daemon-local glue, while the broader staged
+`bluezdaemon-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 A2DP closeout session owner moved into upstream compat
+
+`blueza2dp` no longer owns the closeout session graph implementation directly
+inside `tools/a2dp_main.c`.  The graph and state transitions are now emitted
+through `bluez_upstream_a2dp_closeout_session_*()` helpers in
+`bluez/upstream_a2dp_compat.c`, and the hwsim validator requires that
+`compile-unit` evidence.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-a2dp-closeout-session-compat-owner-v2.log`:
+  PASS.
+- `FeatherCore/build/logs/build-bt2-a2dp-closeout-session-compat-owner-v2.log`:
+  PASS.
+- `FeatherCore/build/logs/run-a2dp-closeout-session-compat-owner-v2-verify.log`:
+  PASS.
+
+This reduces A2DP tool-local glue, while the broader staged
+`blueza2dp-adapter-not-unmodified-bluetoothd` boundary remains.
+
+## 2026-06-17 BlueZ A2DP upstream session object convergence
+
+`blueza2dp` now carries closeout state through an explicit
+`bluez_a2dp_session` object.  The object tracks profile, endpoint, AVDTP,
+media transport, media fd, codec, pending request, L2CAP signaling/media
+channels, and cleanup ownership for both source and sink roles.
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-bluez-a2dp-session-object.log`: PASS.
+- `FeatherCore/build/logs/build-bt2-bluez-a2dp-session-object.log`: PASS.
+- `FeatherCore/build/logs/run-bluez-a2dp-session-object-verify.log`: PASS.
+
+The hwsim batch covered `bluez-a2dp-upstream-convergence-closeout` for `bt1`
+and `bt2`.  The remaining boundary is still
+`blueza2dp-adapter-not-unmodified-bluetoothd`; future A2DP convergence should
+replace more staged adapter command flow with callable upstream audio plugin
+objects rather than only structured hwsim harness ownership.
+
+## 2026-06-17 BlueZ mgmt controller object convergence
+
+`bluezmgmt` now carries daemon-bootstrap control state through an explicit
+`bluez_mgmt_controller` object.  The object tracks mgmt fd, adapter, device,
+pending command, discovery, and security ownership across controller-info,
+adapter policy, discovery, pair/connect, disconnect, unpair, error-policy, and
+close.
+
+Validation:
+
+- `FeatherCore/build/logs/build-ble1-bluez-mgmt-controller-object-v3.log`:
+  PASS.
+- `FeatherCore/build/logs/build-ble2-bluez-mgmt-controller-object-v3.log`:
+  PASS.
+- `FeatherCore/build/logs/run-bluez-mgmt-controller-object-v3-verify.log`:
+  PASS.
+
+The mgmt status receive helper now skips unrelated async events until the
+expected command status/complete arrives, matching BlueZ shared/mgmt mainloop
+behavior more closely.  The remaining boundary is still
+`bluezmgmt-daemon-bootstrap-adapter-not-unmodified-bluetoothd`.
+
+## 2026-06-17 BlueZ Network object graph convergence
+
+`blueznetwork` now carries Network Profile state through an explicit
+`bluez_network_session` object.  The session records service, role, PSM/CID,
+connected L2CAP fd, BNEP control fd, device name, and lifecycle state, and
+prints validator-gated upstream object graph evidence for:
+
+- `profiles/network/manager.c`
+- `profiles/network/server.c`
+- `profiles/network/connection.c`
+- `profiles/network/bnep.c`
+
+Validation:
+
+- `FeatherCore/build/logs/build-bt1-bluez-network-object-graph.log`: PASS.
+- `FeatherCore/build/logs/build-bt2-bluez-network-object-graph.log`: PASS.
+- `FeatherCore/build/logs/run-bluez-network-object-graph-verify.log`: PASS.
+
+The hwsim batch covered `bluez-network-ping`,
+`bluez-network-reconnect-stress`, and `bluez-network-iperf-matrix`.
+The remaining boundary is still
+`blueznetwork-adapter-not-unmodified-bluetoothd`; future work should replace
+more adapter command flow with callable upstream Network plugin routines.
+
 This directory contains NuttX apps that act as user-space frontends for the
 Linux Bluetooth port.
 

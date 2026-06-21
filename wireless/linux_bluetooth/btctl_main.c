@@ -9,13 +9,118 @@
  ****************************************************************************/
 
 #include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <sys/uio.h>
+#include <unistd.h>
 
 #include <nuttx/config.h>
 #include <nuttx/wireless/linux_bluetooth.h>
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifndef AF_BLUETOOTH
+#  define AF_BLUETOOTH 31
+#endif
+
+#ifndef LINUX_BT_NATIVE_CMTPCONNADD
+#  define LINUX_BT_NATIVE_CMTPCONNADD      (('C') | 200)
+#  define LINUX_BT_NATIVE_CMTPCONNDEL      (('C') | 201)
+#  define LINUX_BT_NATIVE_CMTPGETCONNLIST  (('C') | 210)
+#  define LINUX_BT_NATIVE_CMTPGETCONNINFO  (('C') | 211)
+#endif
+
+#ifndef LINUX_BT_NATIVE_HIDPCONNADD
+#  define LINUX_BT_NATIVE_HIDPCONNADD      (('H') | 200)
+#  define LINUX_BT_NATIVE_HIDPCONNDEL      (('H') | 201)
+#  define LINUX_BT_NATIVE_HIDPGETCONNLIST  (('H') | 210)
+#  define LINUX_BT_NATIVE_HIDPGETCONNINFO  (('H') | 211)
+#endif
+
+#define BTCTL_CMTP_LOOPBACK 0
+
+/****************************************************************************
+ * Private Types
+ ****************************************************************************/
+
+struct btctl_bdaddr_s
+{
+  uint8_t b[6];
+};
+
+struct btctl_cmtp_connadd_req_s
+{
+  int sock;
+  uint32_t flags;
+};
+
+struct btctl_cmtp_conndel_req_s
+{
+  struct btctl_bdaddr_s bdaddr;
+  uint32_t flags;
+};
+
+struct btctl_cmtp_conninfo_s
+{
+  struct btctl_bdaddr_s bdaddr;
+  uint32_t flags;
+  uint16_t state;
+  int num;
+};
+
+struct btctl_cmtp_connlist_req_s
+{
+  uint32_t cnum;
+  struct btctl_cmtp_conninfo_s *ci;
+};
+
+struct btctl_hidp_connadd_req_s
+{
+  int ctrl_sock;
+  int intr_sock;
+  uint16_t parser;
+  uint16_t rd_size;
+  uint8_t *rd_data;
+  uint8_t country;
+  uint8_t subclass;
+  uint16_t vendor;
+  uint16_t product;
+  uint16_t version;
+  uint32_t flags;
+  uint32_t idle_to;
+  char name[128];
+};
+
+struct btctl_hidp_conndel_req_s
+{
+  struct btctl_bdaddr_s bdaddr;
+  uint32_t flags;
+};
+
+struct btctl_hidp_conninfo_s
+{
+  struct btctl_bdaddr_s bdaddr;
+  uint32_t flags;
+  uint16_t state;
+  uint16_t vendor;
+  uint16_t product;
+  uint16_t version;
+  char name[128];
+};
+
+struct btctl_hidp_connlist_req_s
+{
+  uint32_t cnum;
+  struct btctl_hidp_conninfo_s *ci;
+};
 
 /****************************************************************************
  * Private Functions
@@ -27,7 +132,7 @@ static void btctl_usage(void)
   printf("\\n");
   printf("commands:\\n");
   printf("  info\\n");
-  printf("  upstream [status|open|create [opcode]|close|read|drain|drain-trace [max]|poll|pump|bridge [rounds] [max-records]|6lowpan-up [ifname]|6lowpan-status|6lowpan-down|socket hci [raw|user|monitor|control|logging] [dev]|socket l2cap [psm] [cid]|socket iso [addr-type]|socket-send raw|user <dev> cmd|acl|sco|iso|vendor <hex...>|socket-filter <dev> <type-mask> <event-mask0> <event-mask1> [opcode]|socket-ioctl [dev] [up|down|reset|restat|scan|auth|encrypt|ptype|linkpol|linkmode|aclmtu|scomtu|connlist|conninfo|authinfo|block|unblock] [dev-opt|acl|le|cis|bis]|l2cap-bind <psm> <cid> <handle>|l2cap-connect <psm> <cid>|l2cap-listen [backlog]|l2cap-recv [max]|l2cap-write <hex...>|l2cap-close|l2cap-send <psm> <cid> <handle> <hex...>|avdtp-listen <handle>|avdtp-recv [max]|avdtp-auto-rsp <peer>|avdtp-auto-rsp-loop <peer> <count>|avdtp-close|avdtp-discover <peer>|avdtp-discover-rsp <peer>|avdtp-getcap <peer>|avdtp-getcap-rsp <peer>|avdtp-setconfig <peer>|avdtp-setconfig-rsp <peer>|avdtp-open <peer>|avdtp-open-rsp <peer>|avdtp-start <peer>|avdtp-start-rsp <peer>|avdtp-suspend <peer>|avdtp-suspend-rsp <peer>|avdtp-close-stream <peer>|avdtp-close-stream-rsp <peer>|avdtp-reconfigure <peer>|avdtp-reconfigure-rsp <peer>|avdtp-abort <peer>|avdtp-abort-rsp <peer>|avdtp-delay-report <peer>|avdtp-delay-report-rsp <peer>|avdtp-getconfig <peer>|avdtp-getconfig-rsp <peer>|avdtp-getallcap <peer>|avdtp-getallcap-rsp <peer>|avdtp-security-control <peer>|avdtp-security-control-rsp <peer>|iso-bind <addr-type> <handle>|iso-connect <addr-type>|iso-recv [max]|iso-write <hex...>|iso-close|iso-send <addr-type> <handle> <hex...>|mgmt-listen|mgmt-read [max]|mgmt-send <opcode> [index] [param]|mgmt-close|mgmt-poll-discovery [max]|mgmt-socket <opcode> [index] [param]|hci-connect-br <peer>|hci-disconnect-br <peer>|hci-connect-le <peer>|hci-disconnect-le <peer>|a2dp-source-sample [peer]|le-audio-source-sample <big> <bis>|send|sendhex cmd|acl|iso|event <payload>]\\n");
+  printf("  upstream [status|hci-status|open|create [opcode]|close|read|drain|drain-trace [max]|poll|pump|bridge [rounds] [max-records]|6lowpan-up [ifname]|6lowpan-status|6lowpan-down|socket hci [raw|user|monitor|control|logging] [dev]|socket l2cap [psm] [cid]|socket iso [addr-type]|socket cmtp|ordinary-cmtp-socket [handle]|ordinary-hidp-socket [handle]|socket-send raw|user <dev> cmd|acl|sco|iso|vendor <hex...>|socket-cmtp [handle]|socket-filter <dev> <type-mask> <event-mask0> <event-mask1> [opcode]|socket-ioctl [dev] [up|down|reset|restat|scan|auth|encrypt|ptype|linkpol|linkmode|aclmtu|scomtu|connlist|conninfo|authinfo|block|unblock] [dev-opt|acl|le|cis|bis]|l2cap-bind <psm> <cid> <handle>|l2cap-connect <psm> <cid>|l2cap-listen [backlog]|l2cap-recv [max]|l2cap-write <hex...>|l2cap-close|l2cap-send <psm> <cid> <handle> <hex...>|avdtp-listen <handle>|avdtp-recv [max]|avdtp-auto-rsp <peer>|avdtp-auto-rsp-loop <peer> <count>|avdtp-close|avdtp-discover <peer>|avdtp-discover-rsp <peer>|avdtp-getcap <peer>|avdtp-getcap-rsp <peer>|avdtp-setconfig <peer>|avdtp-setconfig-rsp <peer>|avdtp-open <peer>|avdtp-open-rsp <peer>|avdtp-start <peer>|avdtp-start-rsp <peer>|avdtp-suspend <peer>|avdtp-suspend-rsp <peer>|avdtp-close-stream <peer>|avdtp-close-stream-rsp <peer>|avdtp-reconfigure <peer>|avdtp-reconfigure-rsp <peer>|avdtp-abort <peer>|avdtp-abort-rsp <peer>|avdtp-delay-report <peer>|avdtp-delay-report-rsp <peer>|avdtp-getconfig <peer>|avdtp-getconfig-rsp <peer>|avdtp-getallcap <peer>|avdtp-getallcap-rsp <peer>|avdtp-security-control <peer>|avdtp-security-control-rsp <peer>|iso-bind <addr-type> <handle>|iso-connect <addr-type>|iso-recv [max]|iso-write <hex...>|iso-close|iso-send <addr-type> <handle> <hex...>|mgmt-listen|mgmt-read [max]|mgmt-send <opcode> [index] [param]|mgmt-close|mgmt-poll-discovery [max]|mgmt-socket <opcode> [index] [param]|hci-connect-br <peer>|hci-disconnect-br <peer>|hci-connect-le <peer>|hci-disconnect-le <peer>|a2dp-source-sample [peer]|le-audio-source-sample <big> <bis>|send|sendhex cmd|acl|iso|event <payload>]\\n");
   printf("    upstream bridge [rounds] [max-records]\\n");
   printf("    upstream 6lowpan-up [ifname]\\n");
   printf("    upstream 6lowpan-status\\n");
@@ -198,6 +303,10 @@ static int btctl_btproto(const char *arg)
     {
       return LINUX_BT_BTPROTO_BNEP;
     }
+  else if (!strcmp(arg, "cmtp"))
+    {
+      return LINUX_BT_BTPROTO_CMTP;
+    }
   else if (!strcmp(arg, "hci") || !strcmp(arg, "mgmt"))
     {
       return LINUX_BT_BTPROTO_HCI;
@@ -234,6 +343,486 @@ static int btctl_bnep_ioctl_action(const char *arg)
     }
 
   return (int)strtol(arg, NULL, 0);
+}
+
+static void btctl_cmtp_fill_bdaddr(uint16_t seed,
+                                   struct btctl_bdaddr_s *bdaddr)
+{
+  if (bdaddr == NULL)
+    {
+      return;
+    }
+
+  bdaddr->b[0] = (uint8_t)(seed & 0xff);
+  bdaddr->b[1] = (uint8_t)(seed >> 8);
+  bdaddr->b[2] = 0xc4;
+  bdaddr->b[3] = 0x17;
+  bdaddr->b[4] = 0x00;
+  bdaddr->b[5] = 0x48;
+}
+
+static void btctl_hidp_fill_bdaddr(uint16_t seed,
+                                   struct btctl_bdaddr_s *bdaddr)
+{
+  if (bdaddr == NULL)
+    {
+      return;
+    }
+
+  bdaddr->b[0] = (uint8_t)(seed & 0xff);
+  bdaddr->b[1] = (uint8_t)(seed >> 8);
+  bdaddr->b[2] = 0x24;
+  bdaddr->b[3] = 0x11;
+  bdaddr->b[4] = 0x00;
+  bdaddr->b[5] = 0x48;
+}
+
+static int btctl_expected_ioctl_error(int ret, int err)
+{
+  return ret == -err || (ret == -1 && errno == err);
+}
+
+static int btctl_expected_saved_error(int ret, int saved_errno, int err)
+{
+  return ret == -err || (ret == -1 && saved_errno == err);
+}
+
+struct btctl_unsupported_ops_s
+{
+  int bind_ret;
+  int bind_errno;
+  int getsockname_ret;
+  int getsockname_errno;
+  int getpeername_ret;
+  int getpeername_errno;
+  int connect_ret;
+  int connect_errno;
+  int send_ret;
+  int send_errno;
+  int recv_ret;
+  int recv_errno;
+  int listen_ret;
+  int listen_errno;
+  int shutdown_ret;
+  int shutdown_errno;
+  int accept_ret;
+  int accept_errno;
+  int ok;
+};
+
+static void btctl_probe_unsupported_ops(int fd,
+                                        struct btctl_unsupported_ops_s *ops)
+{
+  uint8_t tx = 0;
+  uint8_t rx = 0;
+  struct sockaddr btaddr;
+  socklen_t btaddr_len;
+  struct iovec tx_iov;
+  struct iovec rx_iov;
+  struct msghdr tx_msg;
+  struct msghdr rx_msg;
+  int accept_fd;
+
+  memset(ops, 0, sizeof(*ops));
+  memset(&btaddr, 0, sizeof(btaddr));
+  memset(&tx_msg, 0, sizeof(tx_msg));
+  memset(&rx_msg, 0, sizeof(rx_msg));
+
+  btaddr.sa_family = AF_BLUETOOTH;
+
+  errno = 0;
+  ops->bind_ret = bind(fd, &btaddr, sizeof(btaddr));
+  ops->bind_errno = errno;
+
+  btaddr_len = sizeof(btaddr);
+  errno = 0;
+  ops->getsockname_ret = getsockname(fd, &btaddr, &btaddr_len);
+  ops->getsockname_errno = errno;
+
+  btaddr_len = sizeof(btaddr);
+  errno = 0;
+  ops->getpeername_ret = getpeername(fd, &btaddr, &btaddr_len);
+  ops->getpeername_errno = errno;
+
+  errno = 0;
+  ops->connect_ret = connect(fd, &btaddr, sizeof(btaddr));
+  ops->connect_errno = errno;
+
+  tx_iov.iov_base = &tx;
+  tx_iov.iov_len = sizeof(tx);
+  tx_msg.msg_iov = &tx_iov;
+  tx_msg.msg_iovlen = 1;
+
+  rx_iov.iov_base = &rx;
+  rx_iov.iov_len = sizeof(rx);
+  rx_msg.msg_iov = &rx_iov;
+  rx_msg.msg_iovlen = 1;
+
+  errno = 0;
+  ops->send_ret = (int)sendmsg(fd, &tx_msg, 0);
+  ops->send_errno = errno;
+
+  errno = 0;
+  ops->recv_ret = (int)recvmsg(fd, &rx_msg, 0);
+  ops->recv_errno = errno;
+
+  errno = 0;
+  ops->listen_ret = listen(fd, 1);
+  ops->listen_errno = errno;
+
+  errno = 0;
+  ops->shutdown_ret = shutdown(fd, SHUT_RDWR);
+  ops->shutdown_errno = errno;
+
+  errno = 0;
+  accept_fd = accept(fd, NULL, NULL);
+  ops->accept_errno = errno;
+  if (accept_fd >= 0)
+    {
+      ops->accept_ret = 0;
+      close(accept_fd);
+    }
+  else
+    {
+      ops->accept_ret = accept_fd;
+    }
+
+  ops->ok = btctl_expected_saved_error(ops->bind_ret, ops->bind_errno,
+                                       EOPNOTSUPP) &&
+            btctl_expected_saved_error(ops->getsockname_ret,
+                                       ops->getsockname_errno,
+                                       EOPNOTSUPP) &&
+            btctl_expected_saved_error(ops->getpeername_ret,
+                                       ops->getpeername_errno,
+                                       EOPNOTSUPP) &&
+            btctl_expected_saved_error(ops->connect_ret,
+                                       ops->connect_errno,
+                                       EOPNOTSUPP) &&
+            btctl_expected_saved_error(ops->send_ret, ops->send_errno,
+                                       EOPNOTSUPP) &&
+            btctl_expected_saved_error(ops->recv_ret, ops->recv_errno,
+                                       EOPNOTSUPP) &&
+            btctl_expected_saved_error(ops->listen_ret, ops->listen_errno,
+                                       EOPNOTSUPP) &&
+            btctl_expected_saved_error(ops->shutdown_ret,
+                                       ops->shutdown_errno,
+                                       EOPNOTSUPP) &&
+            btctl_expected_saved_error(ops->accept_ret, ops->accept_errno,
+                                       EOPNOTSUPP);
+}
+
+static int btctl_upstream_ordinary_cmtp_socket(uint16_t handle)
+{
+  struct btctl_cmtp_connadd_req_s add_req;
+  struct btctl_cmtp_conndel_req_s del_req;
+  struct btctl_cmtp_conninfo_s info[1];
+  struct btctl_cmtp_conninfo_s get_info;
+  struct btctl_cmtp_connlist_req_s list_req;
+  struct btctl_unsupported_ops_s unsupported;
+  int fd;
+  int create_nonblock_fd = -1;
+  int create_nonblock_flags = -1;
+  int create_nonblock_close = -1;
+  int nonblock_ret = -1;
+  int add_ret;
+  int dup_add_ret;
+  int dup_add_errno;
+  int list_ret;
+  int info_ret;
+  int del_ret;
+  int post_info_ret;
+  int post_info_errno;
+  int dup_del_ret;
+  int dup_del_errno;
+  int close_ret;
+  int final_ok;
+  int dup_add_ok;
+  int post_info_ok;
+  int dup_del_ok;
+
+  create_nonblock_fd = socket(AF_BLUETOOTH, SOCK_RAW | SOCK_NONBLOCK,
+                              LINUX_BT_BTPROTO_CMTP);
+  if (create_nonblock_fd >= 0)
+    {
+      create_nonblock_flags = fcntl(create_nonblock_fd, F_GETFL);
+      create_nonblock_close = close(create_nonblock_fd);
+    }
+
+  fd = socket(AF_BLUETOOTH, SOCK_RAW, LINUX_BT_BTPROTO_CMTP);
+  if (fd < 0)
+    {
+      printf("btctl: ordinary-cmtp-socket proto=BTPROTO_CMTP "
+             "socket-ret=%d errno=%d final-ok=0\n", fd, errno);
+      return 1;
+    }
+
+  nonblock_ret = fcntl(fd, F_SETFL, O_NONBLOCK);
+  btctl_probe_unsupported_ops(fd, &unsupported);
+
+  memset(&add_req, 0, sizeof(add_req));
+  add_req.sock = handle;
+  add_req.flags = (uint32_t)(1u << BTCTL_CMTP_LOOPBACK);
+  add_ret = ioctl(fd, LINUX_BT_NATIVE_CMTPCONNADD,
+                  (unsigned long)&add_req);
+  errno = 0;
+  dup_add_ret = ioctl(fd, LINUX_BT_NATIVE_CMTPCONNADD,
+                      (unsigned long)&add_req);
+  dup_add_errno = errno;
+
+  memset(info, 0, sizeof(info));
+  memset(&list_req, 0, sizeof(list_req));
+  list_req.cnum = 1;
+  list_req.ci = info;
+  list_ret = ioctl(fd, LINUX_BT_NATIVE_CMTPGETCONNLIST,
+                   (unsigned long)&list_req);
+
+  memset(&get_info, 0, sizeof(get_info));
+  btctl_cmtp_fill_bdaddr(handle, &get_info.bdaddr);
+  info_ret = ioctl(fd, LINUX_BT_NATIVE_CMTPGETCONNINFO,
+                   (unsigned long)&get_info);
+
+  memset(&del_req, 0, sizeof(del_req));
+  btctl_cmtp_fill_bdaddr(handle, &del_req.bdaddr);
+  del_ret = ioctl(fd, LINUX_BT_NATIVE_CMTPCONNDEL,
+                  (unsigned long)&del_req);
+
+  memset(&get_info, 0, sizeof(get_info));
+  btctl_cmtp_fill_bdaddr(handle, &get_info.bdaddr);
+  errno = 0;
+  post_info_ret = ioctl(fd, LINUX_BT_NATIVE_CMTPGETCONNINFO,
+                        (unsigned long)&get_info);
+  post_info_errno = errno;
+  errno = 0;
+  dup_del_ret = ioctl(fd, LINUX_BT_NATIVE_CMTPCONNDEL,
+                      (unsigned long)&del_req);
+  dup_del_errno = errno;
+  close_ret = close(fd);
+
+  errno = dup_add_errno;
+  dup_add_ok = btctl_expected_ioctl_error(dup_add_ret, EALREADY);
+  errno = post_info_errno;
+  post_info_ok = btctl_expected_ioctl_error(post_info_ret, ENOENT);
+  errno = dup_del_errno;
+  dup_del_ok = btctl_expected_ioctl_error(dup_del_ret, ENOENT);
+  final_ok = add_ret == 0 &&
+             create_nonblock_fd >= 0 &&
+             create_nonblock_flags >= 0 &&
+             (create_nonblock_flags & O_NONBLOCK) != 0 &&
+             create_nonblock_close == 0 &&
+             nonblock_ret == 0 &&
+             unsupported.ok &&
+             dup_add_ok &&
+             list_ret == 0 &&
+             list_req.cnum == 1 &&
+             info_ret == 0 &&
+             del_ret == 0 &&
+             post_info_ok &&
+             dup_del_ok &&
+             close_ret == 0;
+
+  printf("btctl: ordinary-cmtp-socket proto=BTPROTO_CMTP "
+         "socket-ret=%d nonblock-ret=%d create-nonblock-fd=%d "
+         "create-nonblock-flags=0x%x create-nonblock-close=%d "
+         "create-nonblock-ok=%u unsupported-bind-ret=%d "
+         "unsupported-bind-errno=%d unsupported-getsockname-ret=%d "
+         "unsupported-getsockname-errno=%d "
+         "unsupported-getpeername-ret=%d "
+         "unsupported-getpeername-errno=%d unsupported-connect-ret=%d "
+         "unsupported-connect-errno=%d unsupported-send-ret=%d "
+         "unsupported-send-errno=%d unsupported-recv-ret=%d "
+         "unsupported-recv-errno=%d unsupported-listen-ret=%d "
+         "unsupported-listen-errno=%d unsupported-shutdown-ret=%d "
+         "unsupported-shutdown-errno=%d unsupported-accept-ret=%d "
+         "unsupported-accept-errno=%d unsupported-ok=%u "
+         "ioctl=CMTPCONNADD ret=%d duplicate-ret=%d "
+         "ioctl=CMTPGETCONNLIST ret=%d cnum=%u "
+         "ioctl=CMTPGETCONNINFO ret=%d state=%u num=%d "
+         "flags=0x%08" PRIx32 " ioctl=CMTPCONNDEL ret=%d "
+         "post-del-info-ret=%d missing-del-ret=%d close-ret=%d "
+         "path=ordinary-socket final-ok=%d\n",
+         fd, nonblock_ret, create_nonblock_fd, create_nonblock_flags,
+         create_nonblock_close,
+         create_nonblock_fd >= 0 &&
+         create_nonblock_flags >= 0 &&
+         (create_nonblock_flags & O_NONBLOCK) != 0 &&
+         create_nonblock_close == 0,
+         unsupported.bind_ret, unsupported.bind_errno,
+         unsupported.getsockname_ret, unsupported.getsockname_errno,
+         unsupported.getpeername_ret, unsupported.getpeername_errno,
+         unsupported.connect_ret, unsupported.connect_errno,
+         unsupported.send_ret, unsupported.send_errno,
+         unsupported.recv_ret, unsupported.recv_errno,
+         unsupported.listen_ret, unsupported.listen_errno,
+         unsupported.shutdown_ret, unsupported.shutdown_errno,
+         unsupported.accept_ret, unsupported.accept_errno,
+         unsupported.ok,
+         add_ret, dup_add_ret, list_ret, list_ret == 0 ?
+         list_req.cnum : 0, info_ret, info_ret == 0 ? get_info.state : 0,
+         info_ret == 0 ? get_info.num : 0,
+         info_ret == 0 ? get_info.flags : 0, del_ret, post_info_ret,
+         dup_del_ret, close_ret, final_ok);
+
+  return final_ok ? 0 : 1;
+}
+
+static int btctl_upstream_ordinary_hidp_socket(uint16_t handle)
+{
+  struct btctl_hidp_connadd_req_s add_req;
+  struct btctl_hidp_conndel_req_s del_req;
+  struct btctl_hidp_conninfo_s info[1];
+  struct btctl_hidp_conninfo_s get_info;
+  struct btctl_hidp_connlist_req_s list_req;
+  struct btctl_unsupported_ops_s unsupported;
+  int fd;
+  int create_nonblock_fd = -1;
+  int create_nonblock_flags = -1;
+  int create_nonblock_close = -1;
+  int nonblock_ret = -1;
+  int add_ret;
+  int dup_add_ret;
+  int dup_add_errno;
+  int list_ret;
+  int info_ret;
+  int del_ret;
+  int post_info_ret;
+  int post_info_errno;
+  int dup_del_ret;
+  int dup_del_errno;
+  int close_ret;
+  int final_ok;
+  int dup_add_ok;
+  int post_info_ok;
+  int dup_del_ok;
+
+  create_nonblock_fd = socket(AF_BLUETOOTH, SOCK_RAW | SOCK_NONBLOCK,
+                              LINUX_BT_BTPROTO_HIDP);
+  if (create_nonblock_fd >= 0)
+    {
+      create_nonblock_flags = fcntl(create_nonblock_fd, F_GETFL);
+      create_nonblock_close = close(create_nonblock_fd);
+    }
+
+  fd = socket(AF_BLUETOOTH, SOCK_RAW, LINUX_BT_BTPROTO_HIDP);
+  if (fd < 0)
+    {
+      printf("btctl: ordinary-hidp-socket proto=BTPROTO_HIDP "
+             "socket-ret=%d errno=%d final-ok=0\n", fd, errno);
+      return 1;
+    }
+
+  nonblock_ret = fcntl(fd, F_SETFL, O_NONBLOCK);
+  btctl_probe_unsupported_ops(fd, &unsupported);
+
+  memset(&add_req, 0, sizeof(add_req));
+  add_req.ctrl_sock = handle;
+  add_req.intr_sock = (int)handle + 1;
+  add_req.parser = 1;
+  add_req.subclass = 0x40;
+  add_req.vendor = 0x05ac;
+  add_req.product = 0x024f;
+  add_req.version = 0x0111;
+  snprintf(add_req.name, sizeof(add_req.name), "Feather HIDP ordinary");
+  add_ret = ioctl(fd, LINUX_BT_NATIVE_HIDPCONNADD,
+                  (unsigned long)&add_req);
+  errno = 0;
+  dup_add_ret = ioctl(fd, LINUX_BT_NATIVE_HIDPCONNADD,
+                      (unsigned long)&add_req);
+  dup_add_errno = errno;
+
+  memset(info, 0, sizeof(info));
+  memset(&list_req, 0, sizeof(list_req));
+  list_req.cnum = 1;
+  list_req.ci = info;
+  list_ret = ioctl(fd, LINUX_BT_NATIVE_HIDPGETCONNLIST,
+                   (unsigned long)&list_req);
+
+  memset(&get_info, 0, sizeof(get_info));
+  btctl_hidp_fill_bdaddr(handle, &get_info.bdaddr);
+  info_ret = ioctl(fd, LINUX_BT_NATIVE_HIDPGETCONNINFO,
+                   (unsigned long)&get_info);
+
+  memset(&del_req, 0, sizeof(del_req));
+  btctl_hidp_fill_bdaddr(handle, &del_req.bdaddr);
+  del_ret = ioctl(fd, LINUX_BT_NATIVE_HIDPCONNDEL,
+                  (unsigned long)&del_req);
+
+  memset(&get_info, 0, sizeof(get_info));
+  btctl_hidp_fill_bdaddr(handle, &get_info.bdaddr);
+  errno = 0;
+  post_info_ret = ioctl(fd, LINUX_BT_NATIVE_HIDPGETCONNINFO,
+                        (unsigned long)&get_info);
+  post_info_errno = errno;
+  errno = 0;
+  dup_del_ret = ioctl(fd, LINUX_BT_NATIVE_HIDPCONNDEL,
+                      (unsigned long)&del_req);
+  dup_del_errno = errno;
+  close_ret = close(fd);
+
+  errno = dup_add_errno;
+  dup_add_ok = btctl_expected_ioctl_error(dup_add_ret, EALREADY);
+  errno = post_info_errno;
+  post_info_ok = btctl_expected_ioctl_error(post_info_ret, ENOENT);
+  errno = dup_del_errno;
+  dup_del_ok = btctl_expected_ioctl_error(dup_del_ret, ENOENT);
+  final_ok = add_ret == 0 &&
+             create_nonblock_fd >= 0 &&
+             create_nonblock_flags >= 0 &&
+             (create_nonblock_flags & O_NONBLOCK) != 0 &&
+             create_nonblock_close == 0 &&
+             nonblock_ret == 0 &&
+             unsupported.ok &&
+             dup_add_ok &&
+             list_ret == 0 &&
+             list_req.cnum == 1 &&
+             info_ret == 0 &&
+             del_ret == 0 &&
+             post_info_ok &&
+             dup_del_ok &&
+             close_ret == 0;
+
+  printf("btctl: ordinary-hidp-socket proto=BTPROTO_HIDP "
+         "socket-ret=%d nonblock-ret=%d create-nonblock-fd=%d "
+         "create-nonblock-flags=0x%x create-nonblock-close=%d "
+         "create-nonblock-ok=%u unsupported-bind-ret=%d "
+         "unsupported-bind-errno=%d unsupported-getsockname-ret=%d "
+         "unsupported-getsockname-errno=%d "
+         "unsupported-getpeername-ret=%d "
+         "unsupported-getpeername-errno=%d unsupported-connect-ret=%d "
+         "unsupported-connect-errno=%d unsupported-send-ret=%d "
+         "unsupported-send-errno=%d unsupported-recv-ret=%d "
+         "unsupported-recv-errno=%d unsupported-listen-ret=%d "
+         "unsupported-listen-errno=%d unsupported-shutdown-ret=%d "
+         "unsupported-shutdown-errno=%d unsupported-accept-ret=%d "
+         "unsupported-accept-errno=%d unsupported-ok=%u "
+         "ioctl=HIDPCONNADD ret=%d duplicate-ret=%d "
+         "ioctl=HIDPGETCONNLIST ret=%d cnum=%u "
+         "ioctl=HIDPGETCONNINFO ret=%d state=%u "
+         "vendor=0x%04x product=0x%04x ioctl=HIDPCONNDEL ret=%d "
+         "post-del-info-ret=%d missing-del-ret=%d close-ret=%d "
+         "path=ordinary-socket final-ok=%d\n",
+         fd, nonblock_ret, create_nonblock_fd, create_nonblock_flags,
+         create_nonblock_close,
+         create_nonblock_fd >= 0 &&
+         create_nonblock_flags >= 0 &&
+         (create_nonblock_flags & O_NONBLOCK) != 0 &&
+         create_nonblock_close == 0,
+         unsupported.bind_ret, unsupported.bind_errno,
+         unsupported.getsockname_ret, unsupported.getsockname_errno,
+         unsupported.getpeername_ret, unsupported.getpeername_errno,
+         unsupported.connect_ret, unsupported.connect_errno,
+         unsupported.send_ret, unsupported.send_errno,
+         unsupported.recv_ret, unsupported.recv_errno,
+         unsupported.listen_ret, unsupported.listen_errno,
+         unsupported.shutdown_ret, unsupported.shutdown_errno,
+         unsupported.accept_ret, unsupported.accept_errno,
+         unsupported.ok,
+         add_ret, dup_add_ret, list_ret, list_ret == 0 ?
+         list_req.cnum : 0, info_ret, info_ret == 0 ? get_info.state : 0,
+         info_ret == 0 ? get_info.vendor : 0,
+         info_ret == 0 ? get_info.product : 0, del_ret, post_info_ret,
+         dup_del_ret, close_ret, final_ok);
+
+  return final_ok ? 0 : 1;
 }
 
 static int btctl_hci_channel(const char *arg)
@@ -430,6 +1019,10 @@ static int btctl_poll(uint16_t type)
     {
       ret = linux_bt_acl_poll(out, sizeof(out));
     }
+  else if (type == LINUX_BT_HWSIM_TYPE_CTRL)
+    {
+      ret = linux_bt_ctrl_poll(out, sizeof(out));
+    }
   else
     {
       ret = linux_bt_hwsim_read(type, out, sizeof(out));
@@ -571,6 +1164,11 @@ enum btctl_avdtp_sep_state
 
 static enum btctl_avdtp_sep_state g_btctl_avdtp_sink_state =
   BTCTL_AVDTP_SEP_IDLE;
+static uint8_t g_btctl_avdtp_seen_req[16][128];
+static uint8_t g_btctl_avdtp_seen_rsp[16][128];
+static size_t g_btctl_avdtp_seen_req_len[16];
+static size_t g_btctl_avdtp_seen_rsp_len[16];
+static size_t g_btctl_avdtp_seen_req_count;
 
 static const char *btctl_upstream_avdtp_state_name(
   enum btctl_avdtp_sep_state state)
@@ -622,9 +1220,21 @@ static int btctl_upstream_avdtp_listen(uint16_t handle)
     }
 
   printf("%s", out);
+  ret = linux_bt_upstream_l2cap_socket_native_control_probe(1, out,
+                                                            sizeof(out));
+  if (ret < 0)
+    {
+      printf("%s", out);
+      printf("btctl: upstream avdtp-listen native-control failed: %d\n",
+             ret);
+      return 1;
+    }
+
+  printf("%s", out);
   printf("btctl: upstream avdtp signaling listening handle=0x%04x\n",
          handle);
   g_btctl_avdtp_sink_state = BTCTL_AVDTP_SEP_IDLE;
+  g_btctl_avdtp_seen_req_count = 0;
   return 0;
 }
 
@@ -723,6 +1333,23 @@ static int btctl_upstream_avdtp_auto_rsp(uint16_t peer)
       return req_len == 0 ? 1 : 0;
     }
 
+  for (attempt = 0;
+       attempt < (int)g_btctl_avdtp_seen_req_count;
+       attempt++)
+    {
+      if (req_len == g_btctl_avdtp_seen_req_len[attempt] &&
+          memcmp(req, g_btctl_avdtp_seen_req[attempt], req_len) == 0)
+        {
+          printf("btctl: upstream avdtp-auto-rsp duplicate-rsp len=%u\n",
+                 (unsigned int)req_len);
+          ret = btctl_upstream_avdtp_send(peer,
+                                          g_btctl_avdtp_seen_rsp[attempt],
+                                          g_btctl_avdtp_seen_rsp_len[attempt],
+                                          "avdtp-auto-rsp-duplicate");
+          return ret == 0 ? 2 : ret;
+        }
+    }
+
   hdr = req[0];
   signal = req[1];
   msg_type = (uint8_t)(hdr & 0x03);
@@ -735,7 +1362,10 @@ static int btctl_upstream_avdtp_auto_rsp(uint16_t peer)
 
   if (pkt_type != 0 || msg_type != 0)
     {
-      err = 0x11;
+      printf("btctl: upstream avdtp-auto-rsp non-command-skip "
+             "signal=0x%02x msg-type=0x%02x pkt-type=0x%02x len=%u\n",
+             signal, msg_type, pkt_type, (unsigned int)req_len);
+      return 2;
     }
   else
     {
@@ -918,6 +1548,28 @@ static int btctl_upstream_avdtp_auto_rsp(uint16_t peer)
       return ret;
     }
 
+  if (g_btctl_avdtp_seen_req_count <
+      sizeof(g_btctl_avdtp_seen_req) /
+      sizeof(g_btctl_avdtp_seen_req[0]))
+    {
+      size_t seen_len = req_len;
+
+      if (seen_len > sizeof(g_btctl_avdtp_seen_req[0]))
+        {
+          seen_len = sizeof(g_btctl_avdtp_seen_req[0]);
+        }
+
+      memcpy(g_btctl_avdtp_seen_req[g_btctl_avdtp_seen_req_count],
+             req, seen_len);
+      g_btctl_avdtp_seen_req_len[g_btctl_avdtp_seen_req_count] =
+        seen_len;
+      memcpy(g_btctl_avdtp_seen_rsp[g_btctl_avdtp_seen_req_count],
+             rsp, rsp_len);
+      g_btctl_avdtp_seen_rsp_len[g_btctl_avdtp_seen_req_count] =
+        rsp_len;
+      g_btctl_avdtp_seen_req_count++;
+    }
+
   printf("btctl: upstream avdtp-auto-rsp signal=0x%02x "
          "msg-type=0x%02x pkt-type=0x%02x rsp-len=%u "
          "err=0x%02x state=%s->%s\n",
@@ -933,9 +1585,16 @@ static int btctl_upstream_avdtp_auto_rsp_loop(uint16_t peer,
   unsigned int done;
   int ret;
 
-  for (done = 0; done < count; done++)
+  done = 0;
+  while (done < count)
     {
       ret = btctl_upstream_avdtp_auto_rsp(peer);
+      if (ret == 2)
+        {
+          usleep(250000);
+          continue;
+        }
+
       if (ret != 0)
         {
           printf("btctl: upstream avdtp-auto-rsp-loop failed "
@@ -943,6 +1602,8 @@ static int btctl_upstream_avdtp_auto_rsp_loop(uint16_t peer,
                  done, count, ret);
           return ret;
         }
+
+      done++;
     }
 
   printf("btctl: upstream avdtp-auto-rsp-loop complete count=%u\n",
@@ -998,7 +1659,7 @@ int main(int argc, char *argv[])
 
   if (!strcmp(argv[1], "upstream"))
     {
-      char out[4096];
+      char out[12000];
       int ret;
 
       if (argc >= 3 && !strcmp(argv[2], "status"))
@@ -1007,6 +1668,19 @@ int main(int argc, char *argv[])
           if (ret < 0)
             {
               printf("btctl: upstream status failed: %d\n", ret);
+              return 1;
+            }
+
+          printf("%s", out);
+          return 0;
+        }
+
+      if (argc >= 3 && !strcmp(argv[2], "hci-status"))
+        {
+          ret = linux_bt_upstream_hci_status(out, sizeof(out));
+          if (ret < 0)
+            {
+              printf("btctl: upstream hci-status failed: %d\n", ret);
               return 1;
             }
 
@@ -1246,6 +1920,42 @@ int main(int argc, char *argv[])
 
           printf("%s", out);
           return 0;
+        }
+
+      if (argc >= 3 && !strcmp(argv[2], "socket-cmtp"))
+        {
+          uint16_t handle = argc >= 4 ?
+            (uint16_t)strtoul(argv[3], NULL, 0) : 0x00c5;
+
+          ret = linux_bt_upstream_cmtp_socket_session_probe(handle,
+                                                            out,
+                                                            sizeof(out));
+          if (ret < 0)
+            {
+              printf("%s", out);
+              printf("btctl: upstream socket-cmtp probe failed: %d\n",
+                     ret);
+              return 1;
+            }
+
+          printf("%s", out);
+          return 0;
+        }
+
+      if (argc >= 3 && !strcmp(argv[2], "ordinary-cmtp-socket"))
+        {
+          uint16_t handle = argc >= 4 ?
+            (uint16_t)strtoul(argv[3], NULL, 0) : 0x00c5;
+
+          return btctl_upstream_ordinary_cmtp_socket(handle);
+        }
+
+      if (argc >= 3 && !strcmp(argv[2], "ordinary-hidp-socket"))
+        {
+          uint16_t handle = argc >= 4 ?
+            (uint16_t)strtoul(argv[3], NULL, 0) : 0x00a5;
+
+          return btctl_upstream_ordinary_hidp_socket(handle);
         }
 
       if (argc >= 4 && !strcmp(argv[2], "bnep-ioctl"))

@@ -66,6 +66,219 @@ config LINUX_BLUEZ_NETWORK_STACKSIZE
 
 endif
 
+config LINUX_BLUEZ_IPSP
+	tristate "BlueZ LE IPSP Profile-shaped adapter"
+	default y
+	depends on LINUX_BLUEZ_PORT && NET_LINUX_BLUETOOTH_6LOWPAN_BRIDGE
+	---help---
+		Enable bluezipsp, a BlueZ-facing LE IPSP profile adapter for
+		BLE 6LoWPAN/IP networking validation.  It drives the imported
+		Linux Bluetooth 6LoWPAN path through an apps-side BlueZ-shaped
+		connect/status/disconnect surface instead of the low-level btctl
+		probe command.
+
+if LINUX_BLUEZ_IPSP
+
+config LINUX_BLUEZ_IPSP_PROGNAME
+	string "bluezipsp program name"
+	default "bluezipsp"
+
+config LINUX_BLUEZ_IPSP_PRIORITY
+	int "bluezipsp task priority"
+	default 100
+
+config LINUX_BLUEZ_IPSP_STACKSIZE
+	int "bluezipsp stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_GATT
+	tristate "BlueZ GATT/ATT Profile-shaped adapter"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezgatt, a BlueZ-facing GATT/ATT adapter for generic
+		BLE attribute profile validation.  This is intentionally
+		separate from the LE Audio tool so GATT can converge toward
+		shared/att.c, shared/gatt-db.c, shared/gatt-client.c, and
+		shared/gatt-server.c semantics as its own profile surface.
+
+if LINUX_BLUEZ_GATT
+
+config LINUX_BLUEZ_GATT_PROGNAME
+	string "bluezgatt program name"
+	default "bluezgatt"
+
+config LINUX_BLUEZ_GATT_PRIORITY
+	int "bluezgatt task priority"
+	default 100
+
+config LINUX_BLUEZ_GATT_STACKSIZE
+	int "bluezgatt stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_HID
+	tristate "BlueZ HID/HOGP Profile-shaped adapter"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezhid, a BlueZ-facing HID and HID-over-GATT adapter.
+		It provides an independent apps-side closeout surface for
+		profiles/input/device.c, server.c, hog.c, hog-lib.c, Linux HIDP,
+		and the ATT/GATT report path instead of relying only on the
+		aggregate bluezdaemon profile marker.
+
+if LINUX_BLUEZ_HID
+
+config LINUX_BLUEZ_HID_PROGNAME
+	string "bluezhid program name"
+	default "bluezhid"
+
+config LINUX_BLUEZ_HID_PRIORITY
+	int "bluezhid task priority"
+	default 100
+
+config LINUX_BLUEZ_HID_STACKSIZE
+	int "bluezhid stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_HFP
+	tristate "BlueZ HFP/HSP Profile-shaped adapter"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezhfp, a BlueZ-facing Hands-Free/Headset adapter.
+		It provides an independent apps-side closeout surface for
+		HFP HF/AG and HSP HS/AG roles, including RFCOMM-shaped AT
+		transactions and SCO-like audio bearer evidence, instead of
+		relying only on the aggregate bluezdaemon profile marker.
+
+if LINUX_BLUEZ_HFP
+
+config LINUX_BLUEZ_HFP_PROGNAME
+	string "bluezhfp program name"
+	default "bluezhfp"
+
+config LINUX_BLUEZ_HFP_PRIORITY
+	int "bluezhfp task priority"
+	default 100
+
+config LINUX_BLUEZ_HFP_STACKSIZE
+	int "bluezhfp stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_OBEX
+	tristate "BlueZ OBEX Profile-shaped adapter"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezobex, a BlueZ obexd-facing adapter for PBAP, OPP,
+		MAP, MNS, FTP, Sync, and BIP closeout.  It drives OBEX
+		transactions over an RFCOMM-shaped Linux Bluetooth L2CAP bearer
+		so the hwsim cases no longer rely only on aggregate bluezdaemon
+		profile markers for OBEX coverage.
+
+if LINUX_BLUEZ_OBEX
+
+config LINUX_BLUEZ_OBEX_PROGNAME
+	string "bluezobex program name"
+	default "bluezobex"
+
+config LINUX_BLUEZ_OBEX_PRIORITY
+	int "bluezobex task priority"
+	default 100
+
+config LINUX_BLUEZ_OBEX_STACKSIZE
+	int "bluezobex stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_PROFILE
+	tristate "BlueZ remaining profile-shaped closeout adapter"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezprofile, a profile-shaped closeout adapter for the
+		remaining profile families that still need independent hwsim
+		evidence: Mesh, ASHA, MIDI, Ranging, Print, and iAP.  This keeps
+		the closeout surface explicit while the compatibility glue is
+		gradually replaced with more direct upstream BlueZ ownership.
+
+if LINUX_BLUEZ_PROFILE
+
+config LINUX_BLUEZ_PROFILE_PROGNAME
+	string "bluezprofile program name"
+	default "bluezprofile"
+
+config LINUX_BLUEZ_PROFILE_PRIORITY
+	int "bluezprofile task priority"
+	default 100
+
+config LINUX_BLUEZ_PROFILE_STACKSIZE
+	int "bluezprofile stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_A2DP
+	tristate "BlueZ A2DP Profile-shaped closeout adapter"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable blueza2dp, an A2DP profile closeout adapter that keeps
+		AVDTP signaling, media bearer, MediaTransport ownership, SBC
+		codec policy, stream lifecycle, cleanup, and upstream source
+		coverage in one hwsim-verifiable command.
+
+if LINUX_BLUEZ_A2DP
+
+config LINUX_BLUEZ_A2DP_PROGNAME
+	string "blueza2dp program name"
+	default "blueza2dp"
+
+config LINUX_BLUEZ_A2DP_PRIORITY
+	int "blueza2dp task priority"
+	default 100
+
+config LINUX_BLUEZ_A2DP_STACKSIZE
+	int "blueza2dp stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
+config LINUX_BLUEZ_LEAUDIO
+	tristate "BlueZ LE Audio Profile-shaped closeout adapter"
+	default y
+	depends on LINUX_BLUEZ_PORT
+	---help---
+		Enable bluezleaudio, a single-entry LE Audio closeout adapter
+		for BAP/PACS/ASCS/GATT, ISO media, MediaTransport ownership,
+		LC3 policy, cleanup, and upstream source coverage evidence.
+
+if LINUX_BLUEZ_LEAUDIO
+
+config LINUX_BLUEZ_LEAUDIO_PROGNAME
+	string "bluezleaudio program name"
+	default "bluezleaudio"
+
+config LINUX_BLUEZ_LEAUDIO_PRIORITY
+	int "bluezleaudio task priority"
+	default 100
+
+config LINUX_BLUEZ_LEAUDIO_STACKSIZE
+	int "bluezleaudio stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
+
 config LINUX_BLUEZ_MGMT
 	tristate "BlueZ mgmt control client"
 	default y

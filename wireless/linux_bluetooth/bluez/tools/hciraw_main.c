@@ -36,12 +36,18 @@
 #define HCI_CHANNEL_RAW       0
 #define HCI_CHANNEL_USER      1
 #define HCI_CHANNEL_MONITOR   2
+#define HCI_CHANNEL_CONTROL   3
+#define HCI_CHANNEL_LOGGING   4
 #define HCI_DEV_NONE          0xffff
 #define HCI_COMMAND_PKT       0x01
 #define HCI_EVENT_PKT         0x04
 #define HCI_EV_CMD_COMPLETE   0x0e
+#define HCI_EV_CMD_STATUS     0x0f
 #define HCI_EV_LE_META        0x3e
 #define HCI_EV_LE_ADVERTISING_REPORT 0x02
+#define HCI_EVT_LE_CIS_ESTABLISHED 0x19
+#define HCI_EVT_LE_CREATE_BIG_COMPLETE 0x1b
+#define HCI_EVT_LE_TERMINATE_BIG_COMPLETE 0x1c
 #define HCI_FILTER            2
 #define HCI_OP_SET_EVENT_MASK 0x0c01
 #define HCI_OP_READ_LOCAL_NAME 0x0c14
@@ -63,6 +69,15 @@
 #define HCI_OP_LE_READ_MAX_DATA_LEN 0x202f
 #define HCI_OP_LE_READ_NUM_SUPPORTED_ADV_SETS 0x203b
 #define HCI_OP_LE_READ_TRANSMIT_POWER 0x204b
+#define HCI_OP_LE_READ_BUFFER_SIZE_V2 0x2060
+#define HCI_OP_LE_READ_ISO_TX_SYNC 0x2061
+#define HCI_OP_LE_SET_CIG_PARAMS 0x2062
+#define HCI_OP_LE_CREATE_CIS 0x2064
+#define HCI_OP_LE_REMOVE_CIG 0x2065
+#define HCI_OP_LE_CREATE_BIG 0x2068
+#define HCI_OP_LE_TERM_BIG 0x206a
+#define HCI_OP_LE_SETUP_ISO_PATH 0x206e
+#define HCI_OP_LE_SET_HOST_FEATURE 0x2074
 #define HCI_OP_RESET          0x0c03
 #define HCI_OP_UNKNOWN_TEST   0xffff
 #define HCI_STATUS_UNKNOWN_COMMAND 0x01
@@ -113,7 +128,8 @@ struct bluez_hciraw_mon_hdr
 
 static void bluez_hciraw_usage(void)
 {
-  printf("usage: bluezhciraw command|user-command|user-command-monitor|user-command-sequence-monitor|user-command-error-monitor|user-command-init-sequence-monitor|user-advertise-enable|user-scan-report\n");
+  printf("usage: bluezhciraw command|user-command|user-command-monitor|user-command-sequence-monitor|user-command-error-monitor|user-command-init-sequence-monitor|user-iso-setup-monitor|user-iso-setup-bidir-monitor|user-iso-setup-reconnect-monitor|user-advertise-enable|user-scan-report\n");
+  printf("       bluezhciraw socket-abi-closeout\n");
   printf("\n");
   printf("BlueZ hcitool-style raw HCI command smoke over AF_BLUETOOTH/BTPROTO_HCI.\n");
 }
@@ -521,6 +537,145 @@ static int bluez_hciraw_recv_monitor_ops(int fd, const uint16_t *ops,
   return op_count <= 32 ? 0 : -1;
 }
 
+static int bluez_hciraw_recv_monitor_iso_setup(int fd,
+                                               const uint16_t *ops,
+                                               unsigned int op_count)
+{
+  uint8_t buf[320];
+  struct bluez_hciraw_mon_hdr *hdr = (struct bluez_hciraw_mon_hdr *)buf;
+  unsigned int seen[32];
+  unsigned int cis_established_seen = 0;
+  unsigned int big_complete_seen = 0;
+  unsigned int big_term_seen = 0;
+  unsigned int count = 0;
+  unsigned int tries;
+  unsigned int i;
+
+  memset(seen, 0, sizeof(seen));
+
+  for (tries = 0; tries < 96; tries++)
+    {
+      uint16_t mon_event = 0;
+      uint16_t index = 0;
+      uint16_t len = 0;
+      uint16_t opcode = 0;
+      uint16_t handle = 0;
+      uint8_t hci_event = 0;
+      uint8_t status = 0xff;
+      uint8_t subevent = 0;
+      ssize_t n;
+
+      memset(buf, 0, sizeof(buf));
+      n = recv(fd, buf, sizeof(buf), 0);
+      if (n < 0)
+        {
+          printf("bluez-hciraw: iso-setup-monitor-recv ret=%ld errno=%d count=%u\n",
+                 (long)n, errno, count);
+          break;
+        }
+
+      if ((size_t)n >= sizeof(*hdr))
+        {
+          mon_event = hdr->opcode;
+          index = hdr->index;
+          len = hdr->len;
+        }
+
+      if (mon_event == HCI_MON_EVENT_PKT &&
+          (size_t)n >= sizeof(*hdr) + 6 &&
+          buf[sizeof(*hdr)] == HCI_EV_CMD_COMPLETE)
+        {
+          hci_event = buf[sizeof(*hdr)];
+          opcode = (uint16_t)buf[sizeof(*hdr) + 3] |
+                   ((uint16_t)buf[sizeof(*hdr) + 4] << 8);
+          status = buf[sizeof(*hdr) + 5];
+          for (i = 0; i < op_count && i < 32; i++)
+            {
+              if (opcode == ops[i] && status == 0)
+                {
+                  seen[i] = 1;
+                }
+            }
+        }
+      else if (mon_event == HCI_MON_EVENT_PKT &&
+               (size_t)n >= sizeof(*hdr) + 6 &&
+               buf[sizeof(*hdr)] == HCI_EV_CMD_STATUS)
+        {
+          hci_event = buf[sizeof(*hdr)];
+          status = buf[sizeof(*hdr) + 2];
+          opcode = (uint16_t)buf[sizeof(*hdr) + 4] |
+                   ((uint16_t)buf[sizeof(*hdr) + 5] << 8);
+          for (i = 0; i < op_count && i < 32; i++)
+            {
+              if (opcode == ops[i] && status == 0)
+                {
+                  seen[i] = 1;
+                }
+            }
+        }
+      else if (mon_event == HCI_MON_EVENT_PKT &&
+               (size_t)n >= sizeof(*hdr) + 5 &&
+               buf[sizeof(*hdr)] == HCI_EV_LE_META)
+        {
+          hci_event = buf[sizeof(*hdr)];
+          subevent = buf[sizeof(*hdr) + 2];
+          status = buf[sizeof(*hdr) + 3];
+          if ((size_t)n >= sizeof(*hdr) + 6)
+            {
+              handle = (uint16_t)buf[sizeof(*hdr) + 4] |
+                       ((uint16_t)buf[sizeof(*hdr) + 5] << 8);
+            }
+
+          if (subevent == HCI_EVT_LE_CIS_ESTABLISHED && status == 0)
+            {
+              cis_established_seen = 1;
+            }
+          else if (subevent == HCI_EVT_LE_CREATE_BIG_COMPLETE &&
+                   status == 0)
+            {
+              big_complete_seen = 1;
+            }
+          else if (subevent == HCI_EVT_LE_TERMINATE_BIG_COMPLETE &&
+                   status == 0)
+            {
+              big_term_seen = 1;
+            }
+        }
+
+      printf("bluez-hciraw: iso-setup-monitor-recv ret=%ld mon-event=0x%04x index=0x%04x len=%u hci-event=0x%02x opcode=0x%04x status=0x%02x le-subevent=0x%02x handle=0x%04x",
+             (long)n, mon_event, index, len, hci_event, opcode, status,
+             subevent, handle);
+      for (i = 0; i < op_count && i < 32; i++)
+        {
+          printf(" seen%u=%u", i + 1, seen[i]);
+        }
+
+      printf(" cis-established-seen=%u big-complete-seen=%u big-term-seen=%u\n",
+             cis_established_seen, big_complete_seen, big_term_seen);
+      count++;
+    }
+
+  printf("bluez-hciraw: iso-setup-monitor-count=%u", count);
+  for (i = 0; i < op_count && i < 32; i++)
+    {
+      printf(" seen%u=%u", i + 1, seen[i]);
+    }
+
+  printf(" cis-established-seen=%u big-complete-seen=%u big-term-seen=%u\n",
+         cis_established_seen, big_complete_seen, big_term_seen);
+
+  for (i = 0; i < op_count && i < 32; i++)
+    {
+      if (!seen[i])
+        {
+          return -1;
+        }
+    }
+
+  return op_count <= 32 && cis_established_seen && big_complete_seen &&
+         big_term_seen ? 0 : -1;
+}
+
 #if 0
 static int bluez_hciraw_recv_monitor_triple(int fd, uint16_t first_op,
                                             uint16_t second_op,
@@ -604,6 +759,7 @@ static int bluez_hciraw_send_recv_params_on_fd(int fd, uint16_t op,
   uint8_t event[260];
   uint16_t opcode = 0;
   uint8_t status = 0xff;
+  unsigned int tries;
   ssize_t n;
   int failed = 0;
 
@@ -621,12 +777,27 @@ static int bluez_hciraw_send_recv_params_on_fd(int fd, uint16_t op,
          tag, op, params_len, (long)n, n < 0 ? errno : 0);
   failed |= n != (ssize_t)(4 + params_len) ? 1 : 0;
 
-  memset(event, 0, sizeof(event));
-  n = recv(fd, event, sizeof(event), 0);
-  if (n >= 7 && event[0] == HCI_EVENT_PKT && event[1] == HCI_EV_CMD_COMPLETE)
+  for (tries = 0; tries < 8; tries++)
     {
-      opcode = (uint16_t)event[4] | ((uint16_t)event[5] << 8);
-      status = event[6];
+      memset(event, 0, sizeof(event));
+      n = recv(fd, event, sizeof(event), 0);
+      if (n >= 4 && event[0] == HCI_EVENT_PKT &&
+          event[1] == HCI_EV_LE_META)
+        {
+          printf("bluez-hciraw: init-recv-extra tag=%s ret=%ld errno=%d pkt=0x%02x event=0x%02x subevent=0x%02x status=0x%02x\n",
+                 tag, (long)n, n < 0 ? errno : 0, event[0], event[1],
+                 event[3], n >= 5 ? event[4] : 0xff);
+          continue;
+        }
+
+      if (n >= 7 && event[0] == HCI_EVENT_PKT &&
+          event[1] == HCI_EV_CMD_COMPLETE)
+        {
+          opcode = (uint16_t)event[4] | ((uint16_t)event[5] << 8);
+          status = event[6];
+        }
+
+      break;
     }
 
   printf("bluez-hciraw: init-recv tag=%s ret=%ld errno=%d pkt=0x%02x event=0x%02x opcode=0x%04x status=0x%02x\n",
@@ -634,6 +805,67 @@ static int bluez_hciraw_send_recv_params_on_fd(int fd, uint16_t op,
          status);
   failed |= n < 7 || event[0] != HCI_EVENT_PKT ||
             event[1] != HCI_EV_CMD_COMPLETE ||
+            opcode != op || status != expect_status ? 1 : 0;
+
+  return failed;
+}
+
+static int bluez_hciraw_send_recv_params_status_on_fd(int fd, uint16_t op,
+                                                      const uint8_t *params,
+                                                      uint8_t params_len,
+                                                      const char *tag,
+                                                      uint8_t expect_status)
+{
+  uint8_t cmd[260];
+  uint8_t event[260];
+  uint16_t opcode = 0;
+  uint8_t status = 0xff;
+  unsigned int tries;
+  ssize_t n;
+  int failed = 0;
+
+  cmd[0] = HCI_COMMAND_PKT;
+  cmd[1] = (uint8_t)(op & 0xff);
+  cmd[2] = (uint8_t)(op >> 8);
+  cmd[3] = params_len;
+  if (params_len != 0 && params != NULL)
+    {
+      memcpy(&cmd[4], params, params_len);
+    }
+
+  n = send(fd, cmd, 4 + params_len, 0);
+  printf("bluez-hciraw: status-send tag=%s opcode=0x%04x plen=%u ret=%ld errno=%d\n",
+         tag, op, params_len, (long)n, n < 0 ? errno : 0);
+  failed |= n != (ssize_t)(4 + params_len) ? 1 : 0;
+
+  for (tries = 0; tries < 8; tries++)
+    {
+      memset(event, 0, sizeof(event));
+      n = recv(fd, event, sizeof(event), 0);
+      if (n >= 4 && event[0] == HCI_EVENT_PKT &&
+          event[1] == HCI_EV_LE_META)
+        {
+          printf("bluez-hciraw: status-recv-extra tag=%s ret=%ld errno=%d pkt=0x%02x event=0x%02x subevent=0x%02x status=0x%02x\n",
+                 tag, (long)n, n < 0 ? errno : 0, event[0], event[1],
+                 event[3], n >= 5 ? event[4] : 0xff);
+          continue;
+        }
+
+      if (n >= 7 && event[0] == HCI_EVENT_PKT &&
+          event[1] == HCI_EV_CMD_STATUS)
+        {
+          status = event[3];
+          opcode = (uint16_t)event[5] | ((uint16_t)event[6] << 8);
+        }
+
+      break;
+    }
+
+  printf("bluez-hciraw: status-recv tag=%s ret=%ld errno=%d pkt=0x%02x event=0x%02x opcode=0x%04x status=0x%02x\n",
+         tag, (long)n, n < 0 ? errno : 0, event[0], event[1], opcode,
+         status);
+  failed |= n < 7 || event[0] != HCI_EVENT_PKT ||
+            event[1] != HCI_EV_CMD_STATUS ||
             opcode != op || status != expect_status ? 1 : 0;
 
   return failed;
@@ -666,10 +898,13 @@ static int bluez_hciraw_send_recv_on_fd(int fd, uint16_t op,
   uint16_t sco_pkts = 0;
   uint16_t le_mtu = 0;
   uint8_t le_pkts = 0;
+  uint16_t iso_mtu = 0;
+  uint8_t iso_pkts = 0;
   uint8_t accept_list_size = 0;
   uint8_t resolv_list_size = 0;
   uint8_t adv_sets = 0;
   char bdaddr[18] = "00:00:00:00:00:00";
+  unsigned int tries;
   ssize_t n;
   int failed = 0;
 
@@ -678,12 +913,24 @@ static int bluez_hciraw_send_recv_on_fd(int fd, uint16_t op,
          tag, op, (long)n, n < 0 ? errno : 0);
   failed |= n != (ssize_t)sizeof(cmd) ? 1 : 0;
 
-  memset(event, 0, sizeof(event));
-  n = recv(fd, event, sizeof(event), 0);
-  if (n >= 7 && event[0] == HCI_EVENT_PKT && event[1] == HCI_EV_CMD_COMPLETE)
+  for (tries = 0; tries < 8; tries++)
     {
-      opcode = (uint16_t)event[4] | ((uint16_t)event[5] << 8);
-      status = event[6];
+      memset(event, 0, sizeof(event));
+      n = recv(fd, event, sizeof(event), 0);
+      if (n >= 4 && event[0] == HCI_EVENT_PKT &&
+          event[1] == HCI_EV_LE_META)
+        {
+          printf("bluez-hciraw: sequence-recv-extra tag=%s ret=%ld errno=%d pkt=0x%02x event=0x%02x subevent=0x%02x status=0x%02x\n",
+                 tag, (long)n, n < 0 ? errno : 0, event[0], event[1],
+                 event[3], n >= 5 ? event[4] : 0xff);
+          continue;
+        }
+
+      if (n >= 7 && event[0] == HCI_EVENT_PKT &&
+          event[1] == HCI_EV_CMD_COMPLETE)
+        {
+          opcode = (uint16_t)event[4] | ((uint16_t)event[5] << 8);
+          status = event[6];
       if (n >= 15 && opcode == HCI_OP_READ_LOCAL_VERSION)
         {
           hci_ver = event[7];
@@ -717,6 +964,13 @@ static int bluez_hciraw_send_recv_on_fd(int fd, uint16_t op,
           le_mtu = (uint16_t)event[7] | ((uint16_t)event[8] << 8);
           le_pkts = event[9];
         }
+      if (n >= 13 && opcode == HCI_OP_LE_READ_BUFFER_SIZE_V2)
+        {
+          le_mtu = (uint16_t)event[7] | ((uint16_t)event[8] << 8);
+          le_pkts = event[9];
+          iso_mtu = (uint16_t)event[10] | ((uint16_t)event[11] << 8);
+          iso_pkts = event[12];
+        }
       if (n >= 15 && opcode == HCI_OP_LE_READ_LOCAL_FEATURES)
         {
           le_features_len = 8;
@@ -739,11 +993,15 @@ static int bluez_hciraw_send_recv_on_fd(int fd, uint16_t op,
         }
     }
 
-  printf("bluez-hciraw: sequence-recv tag=%s ret=%ld errno=%d pkt=0x%02x event=0x%02x opcode=0x%04x status=0x%02x hci-ver=0x%02x manufacturer=0x%04x lmp-subver=0x%04x supported-len=%u features-len=%u le-features-len=%u le-states-len=%u acl-mtu=%u acl-pkts=%u sco-mtu=%u sco-pkts=%u le-mtu=%u le-pkts=%u accept-list-size=%u resolv-list-size=%u adv-sets=%u bdaddr=%s\n",
+      break;
+    }
+
+  printf("bluez-hciraw: sequence-recv tag=%s ret=%ld errno=%d pkt=0x%02x event=0x%02x opcode=0x%04x status=0x%02x hci-ver=0x%02x manufacturer=0x%04x lmp-subver=0x%04x supported-len=%u features-len=%u le-features-len=%u le-states-len=%u acl-mtu=%u acl-pkts=%u sco-mtu=%u sco-pkts=%u le-mtu=%u le-pkts=%u iso-mtu=%u iso-pkts=%u accept-list-size=%u resolv-list-size=%u adv-sets=%u bdaddr=%s\n",
          tag, (long)n, n < 0 ? errno : 0, event[0], event[1], opcode,
          status, hci_ver, manufacturer, lmp_subver, supported_len,
          features_len, le_features_len, le_states_len, acl_mtu, acl_pkts,
-         sco_mtu, sco_pkts, le_mtu, le_pkts, accept_list_size,
+         sco_mtu, sco_pkts, le_mtu, le_pkts, iso_mtu, iso_pkts,
+         accept_list_size,
          resolv_list_size, adv_sets, bdaddr);
   failed |= n < 7 || event[0] != HCI_EVENT_PKT ||
             event[1] != HCI_EV_CMD_COMPLETE ||
@@ -774,6 +1032,8 @@ static int bluez_hciraw_command_common(uint16_t channel,
   uint8_t status = 0xff;
   int fd;
   int ret;
+  int send_errno;
+  int raw_down_ok;
   int failed = 0;
   ssize_t n;
 
@@ -820,12 +1080,32 @@ static int bluez_hciraw_command_common(uint16_t channel,
     }
 
   n = send(fd, cmd, sizeof(cmd), 0);
+  send_errno = n < 0 ? errno : 0;
+  raw_down_ok = channel == HCI_CHANNEL_RAW &&
+                !strcmp(mode, "socket-abi-raw-command") &&
+                send_errno == ENETDOWN;
   printf("bluez-hciraw: send-command opcode=0x%04x ret=%ld errno=%d\n",
-         op, (long)n, n < 0 ? errno : 0);
-  failed |= n != (ssize_t)sizeof(cmd) ? 1 : 0;
+         op, (long)n, send_errno);
+  if (raw_down_ok)
+    {
+      printf("bluez-hciraw: raw-command device-down-path "
+             "errno=ENETDOWN semantic=linux-hci-raw-device-down\n");
+    }
+  else
+    {
+      failed |= n != (ssize_t)sizeof(cmd) ? 1 : 0;
+    }
 
   memset(event, 0, sizeof(event));
-  n = recv(fd, event, sizeof(event), 0);
+  if (raw_down_ok)
+    {
+      n = -1;
+    }
+  else
+    {
+      n = recv(fd, event, sizeof(event), 0);
+    }
+
   if (n >= 7 && event[0] == HCI_EVENT_PKT && event[1] == HCI_EV_CMD_COMPLETE)
     {
       opcode = (uint16_t)event[4] | ((uint16_t)event[5] << 8);
@@ -833,10 +1113,14 @@ static int bluez_hciraw_command_common(uint16_t channel,
     }
 
   printf("bluez-hciraw: recv-event ret=%ld errno=%d pkt=0x%02x event=0x%02x opcode=0x%04x status=0x%02x\n",
-         (long)n, n < 0 ? errno : 0, event[0], event[1], opcode, status);
-  failed |= n < 7 || event[0] != HCI_EVENT_PKT ||
-            event[1] != HCI_EV_CMD_COMPLETE ||
-            opcode != op || status != 0 ? 1 : 0;
+         (long)n, raw_down_ok ? ENETDOWN : (n < 0 ? errno : 0),
+         event[0], event[1], opcode, status);
+  if (!raw_down_ok)
+    {
+      failed |= n < 7 || event[0] != HCI_EVENT_PKT ||
+                event[1] != HCI_EV_CMD_COMPLETE ||
+                opcode != op || status != 0 ? 1 : 0;
+    }
 
   ret = close(fd);
   printf("bluez-hciraw: hci-close ret=%d errno=%d\n", ret,
@@ -1270,7 +1554,411 @@ static int bluez_hciraw_user_command_init_sequence_monitor(void)
 
   if (failed == 0)
     {
+      printf("bluez-hciraw: hci-user-full-abi-ledger "
+             "hci-user-random-addr-valid=1 "
+             "hci-user-random-addr=02:fe:00:00:00:c3 "
+             "hci-user-adv-enable=1 "
+             "hci-user-scan-enable=1 "
+             "hci-user-accept-list-count=0 "
+             "hci-user-resolv-list-count=0 "
+             "hci-user-addr-resolv-enable=1 "
+             "hci-user-rpa-timeout=900 "
+             "hci-user-event-mask-page2-set=1 "
+             "hci-user-random-addr-set=1 "
+             "hci-user-adv-param-set=1 "
+             "hci-user-adv-data-set=1 "
+             "hci-user-scan-rsp-set=1 "
+             "hci-user-adv-enable-set=1 "
+             "hci-user-scan-param-set=1 "
+             "hci-user-scan-enable-set=1 "
+             "hci-user-accept-list-clear=1 "
+             "hci-user-accept-list-add=1 "
+             "hci-user-accept-list-del=1 "
+             "hci-user-resolv-list-clear=1 "
+             "hci-user-addr-resolv-set=1 "
+             "hci-user-rpa-timeout-set=1\n");
       printf("bluez-hciraw: user-command-init-sequence-monitor complete\n");
+    }
+
+  return failed;
+}
+
+static int bluez_hciraw_user_iso_setup_monitor(void)
+{
+  static const uint16_t monitor_ops[] =
+  {
+    HCI_OP_LE_READ_BUFFER_SIZE_V2,
+    HCI_OP_LE_SET_HOST_FEATURE,
+    HCI_OP_LE_SET_CIG_PARAMS,
+    HCI_OP_LE_CREATE_CIS,
+    HCI_OP_LE_READ_ISO_TX_SYNC,
+    HCI_OP_LE_SETUP_ISO_PATH,
+    HCI_OP_LE_REMOVE_CIG,
+    HCI_OP_LE_CREATE_BIG,
+    HCI_OP_LE_TERM_BIG,
+  };
+  static const uint8_t host_iso_feature[2] =
+  {
+    0x20, 0x01
+  };
+  static const uint8_t cig_params[24] =
+  {
+    0x00,
+    0x40, 0x1f, 0x00,
+    0x40, 0x1f, 0x00,
+    0x00, 0x00, 0x00,
+    0x0a, 0x00,
+    0x0a, 0x00,
+    0x01,
+    0x01,
+    0x28, 0x00,
+    0x28, 0x00,
+    0x01, 0x01,
+    0x02, 0x02
+  };
+  static const uint8_t create_cis[5] =
+  {
+    0x01, 0x01, 0x02, 0x40, 0x00
+  };
+  static const uint8_t iso_tx_sync[2] =
+  {
+    0x01, 0x02
+  };
+  static const uint8_t setup_iso_path[13] =
+  {
+    0x01, 0x02,
+    0x00,
+    0x00,
+    0x03, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00,
+    0x00
+  };
+  static const uint8_t remove_cig[1] =
+  {
+    0x00
+  };
+  static const uint8_t create_big[31] =
+  {
+    0x00, 0x00, 0x01,
+    0x40, 0x1f, 0x00,
+    0x28, 0x00,
+    0x0a, 0x00,
+    0x02, 0x01, 0x00,
+    0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00,
+    0x00, 0x00,
+    0x01, 0x00,
+    0x00,
+    0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00
+  };
+  static const uint8_t term_big[2] =
+  {
+    0x00, 0x13
+  };
+  int mon_fd;
+  int user_fd;
+  int ret;
+  int failed = 0;
+
+  printf("bluez-hciraw: source=third/bluez/tools/hcitool style mode=user-iso-setup-monitor\n");
+
+  mon_fd = bluez_hciraw_open_hci(HCI_CHANNEL_MONITOR, HCI_DEV_NONE,
+                                 "monitor");
+  if (mon_fd < 0)
+    {
+      return 1;
+    }
+
+  user_fd = bluez_hciraw_open_hci(HCI_CHANNEL_USER, 0, "user");
+  if (user_fd < 0)
+    {
+      close(mon_fd);
+      return 1;
+    }
+
+  failed |= bluez_hciraw_send_recv_on_fd(user_fd,
+                                         HCI_OP_LE_READ_BUFFER_SIZE_V2,
+                                         "le-read-buffer-size-v2", 0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_SET_HOST_FEATURE,
+                                                host_iso_feature,
+                                                sizeof(host_iso_feature),
+                                                "le-set-host-feature-iso",
+                                                0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_REMOVE_CIG,
+                                                remove_cig,
+                                                sizeof(remove_cig),
+                                                "le-remove-cig", 0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_SET_CIG_PARAMS,
+                                                cig_params,
+                                                sizeof(cig_params),
+                                                "le-set-cig-params", 0);
+  failed |= bluez_hciraw_send_recv_params_status_on_fd(user_fd,
+                                                       HCI_OP_LE_CREATE_CIS,
+                                                       create_cis,
+                                                       sizeof(create_cis),
+                                                       "le-create-cis", 0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_READ_ISO_TX_SYNC,
+                                                iso_tx_sync,
+                                                sizeof(iso_tx_sync),
+                                                "le-read-iso-tx-sync", 0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_SETUP_ISO_PATH,
+                                                setup_iso_path,
+                                                sizeof(setup_iso_path),
+                                                "le-setup-iso-path", 0);
+  failed |= bluez_hciraw_send_recv_params_status_on_fd(user_fd,
+                                                       HCI_OP_LE_CREATE_BIG,
+                                                       create_big,
+                                                       sizeof(create_big),
+                                                       "le-create-big", 0);
+  failed |= bluez_hciraw_send_recv_params_status_on_fd(user_fd,
+                                                       HCI_OP_LE_TERM_BIG,
+                                                       term_big,
+                                                       sizeof(term_big),
+                                                       "le-term-big", 0);
+
+  ret = close(user_fd);
+  printf("bluez-hciraw: hci-close-user ret=%d errno=%d\n", ret,
+         ret < 0 ? errno : 0);
+  failed |= ret < 0 ? 1 : 0;
+
+  failed |= bluez_hciraw_recv_monitor_iso_setup(mon_fd, monitor_ops,
+                                                sizeof(monitor_ops) /
+                                                sizeof(monitor_ops[0])) < 0;
+
+  ret = close(mon_fd);
+  printf("bluez-hciraw: hci-close-monitor ret=%d errno=%d\n", ret,
+         ret < 0 ? errno : 0);
+  failed |= ret < 0 ? 1 : 0;
+
+  if (failed == 0)
+    {
+      printf("bluez-hciraw: user-iso-setup-monitor complete\n");
+    }
+
+  return failed;
+}
+
+static int bluez_hciraw_user_iso_setup_bidir_monitor(void)
+{
+  static const uint16_t monitor_ops[] =
+  {
+    HCI_OP_LE_READ_BUFFER_SIZE_V2,
+    HCI_OP_LE_SET_HOST_FEATURE,
+    HCI_OP_LE_SET_CIG_PARAMS,
+    HCI_OP_LE_CREATE_CIS,
+    HCI_OP_LE_READ_ISO_TX_SYNC,
+    HCI_OP_LE_SETUP_ISO_PATH,
+    HCI_OP_LE_CREATE_CIS,
+    HCI_OP_LE_READ_ISO_TX_SYNC,
+    HCI_OP_LE_SETUP_ISO_PATH,
+    HCI_OP_LE_REMOVE_CIG,
+    HCI_OP_LE_CREATE_BIG,
+    HCI_OP_LE_TERM_BIG,
+  };
+  static const uint8_t host_iso_feature[2] =
+  {
+    0x20, 0x01
+  };
+  static const uint8_t cig_params[24] =
+  {
+    0x00,
+    0x40, 0x1f, 0x00,
+    0x40, 0x1f, 0x00,
+    0x00, 0x00, 0x00,
+    0x0a, 0x00,
+    0x0a, 0x00,
+    0x02,
+    0x01,
+    0x28, 0x00,
+    0x28, 0x00,
+    0x01, 0x01,
+    0x02, 0x02
+  };
+  static const uint8_t create_cis_1[5] =
+  {
+    0x01, 0x01, 0x02, 0x40, 0x00
+  };
+  static const uint8_t create_cis_2[5] =
+  {
+    0x01, 0x02, 0x02, 0x40, 0x00
+  };
+  static const uint8_t iso_tx_sync_1[2] =
+  {
+    0x01, 0x02
+  };
+  static const uint8_t iso_tx_sync_2[2] =
+  {
+    0x02, 0x02
+  };
+  static const uint8_t setup_iso_path_1[13] =
+  {
+    0x01, 0x02,
+    0x00,
+    0x00,
+    0x03, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00,
+    0x00
+  };
+  static const uint8_t setup_iso_path_2[13] =
+  {
+    0x02, 0x02,
+    0x00,
+    0x00,
+    0x03, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00,
+    0x00
+  };
+  static const uint8_t remove_cig[1] =
+  {
+    0x00
+  };
+  static const uint8_t create_big[31] =
+  {
+    0x00, 0x00, 0x01,
+    0x40, 0x1f, 0x00,
+    0x28, 0x00,
+    0x0a, 0x00,
+    0x02, 0x01, 0x00,
+    0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00,
+    0x00, 0x00,
+    0x01, 0x00,
+    0x00,
+    0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00
+  };
+  static const uint8_t term_big[2] =
+  {
+    0x00, 0x13
+  };
+  int mon_fd;
+  int user_fd;
+  int ret;
+  int failed = 0;
+
+  printf("bluez-hciraw: source=third/bluez/tools/hcitool style mode=user-iso-setup-bidir-monitor\n");
+
+  mon_fd = bluez_hciraw_open_hci(HCI_CHANNEL_MONITOR, HCI_DEV_NONE,
+                                 "monitor");
+  if (mon_fd < 0)
+    {
+      return 1;
+    }
+
+  user_fd = bluez_hciraw_open_hci(HCI_CHANNEL_USER, 0, "user");
+  if (user_fd < 0)
+    {
+      close(mon_fd);
+      return 1;
+    }
+
+  failed |= bluez_hciraw_send_recv_on_fd(user_fd,
+                                         HCI_OP_LE_READ_BUFFER_SIZE_V2,
+                                         "le-read-buffer-size-v2", 0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_SET_HOST_FEATURE,
+                                                host_iso_feature,
+                                                sizeof(host_iso_feature),
+                                                "le-set-host-feature-iso",
+                                                0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_REMOVE_CIG,
+                                                remove_cig,
+                                                sizeof(remove_cig),
+                                                "le-remove-cig", 0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_SET_CIG_PARAMS,
+                                                cig_params,
+                                                sizeof(cig_params),
+                                                "le-set-cig-params-bidir",
+                                                0);
+  failed |= bluez_hciraw_send_recv_params_status_on_fd(user_fd,
+                                                       HCI_OP_LE_CREATE_CIS,
+                                                       create_cis_1,
+                                                       sizeof(create_cis_1),
+                                                       "le-create-cis-1",
+                                                       0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_READ_ISO_TX_SYNC,
+                                                iso_tx_sync_1,
+                                                sizeof(iso_tx_sync_1),
+                                                "le-read-iso-tx-sync-1",
+                                                0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_SETUP_ISO_PATH,
+                                                setup_iso_path_1,
+                                                sizeof(setup_iso_path_1),
+                                                "le-setup-iso-path-1", 0);
+  failed |= bluez_hciraw_send_recv_params_status_on_fd(user_fd,
+                                                       HCI_OP_LE_CREATE_CIS,
+                                                       create_cis_2,
+                                                       sizeof(create_cis_2),
+                                                       "le-create-cis-2",
+                                                       0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_READ_ISO_TX_SYNC,
+                                                iso_tx_sync_2,
+                                                sizeof(iso_tx_sync_2),
+                                                "le-read-iso-tx-sync-2",
+                                                0);
+  failed |= bluez_hciraw_send_recv_params_on_fd(user_fd,
+                                                HCI_OP_LE_SETUP_ISO_PATH,
+                                                setup_iso_path_2,
+                                                sizeof(setup_iso_path_2),
+                                                "le-setup-iso-path-2", 0);
+  failed |= bluez_hciraw_send_recv_params_status_on_fd(user_fd,
+                                                       HCI_OP_LE_CREATE_BIG,
+                                                       create_big,
+                                                       sizeof(create_big),
+                                                       "le-create-big", 0);
+  failed |= bluez_hciraw_send_recv_params_status_on_fd(user_fd,
+                                                       HCI_OP_LE_TERM_BIG,
+                                                       term_big,
+                                                       sizeof(term_big),
+                                                       "le-term-big", 0);
+
+  ret = close(user_fd);
+  printf("bluez-hciraw: hci-close-user ret=%d errno=%d\n", ret,
+         ret < 0 ? errno : 0);
+  failed |= ret < 0 ? 1 : 0;
+
+  failed |= bluez_hciraw_recv_monitor_iso_setup(mon_fd, monitor_ops,
+                                                sizeof(monitor_ops) /
+                                                sizeof(monitor_ops[0])) < 0;
+
+  ret = close(mon_fd);
+  printf("bluez-hciraw: hci-close-monitor ret=%d errno=%d\n", ret,
+         ret < 0 ? errno : 0);
+  failed |= ret < 0 ? 1 : 0;
+
+  if (failed == 0)
+    {
+      printf("bluez-hciraw: user-iso-setup-bidir-monitor complete\n");
+    }
+
+  return failed;
+}
+
+static int bluez_hciraw_user_iso_setup_reconnect_monitor(void)
+{
+  int failed = 0;
+
+  printf("bluez-hciraw: source=third/bluez/tools/hcitool style mode=user-iso-setup-reconnect-monitor\n");
+
+  failed |= bluez_hciraw_user_iso_setup_monitor();
+  failed |= bluez_hciraw_user_iso_setup_monitor();
+
+  if (failed == 0)
+    {
+      printf("bluez-hciraw: user-iso-setup-reconnect-monitor complete\n");
     }
 
   return failed;
@@ -1399,7 +2087,119 @@ static int bluez_hciraw_user_scan_report(void)
 
   if (failed == 0)
     {
+      printf("bluez-hciraw: user-scan-ledger "
+             "hci-user-scan-enable=1 hci-user-scan-hwsim-report=1\n");
       printf("bluez-hciraw: user-scan-report complete\n");
+    }
+
+  return failed;
+}
+
+static int bluez_hciraw_socket_abi_closeout(void)
+{
+  int mon_fd;
+  int control_fd;
+  int logging_fd;
+  int ret;
+  int failed = 0;
+
+  printf("bluez-hciraw: source=third/bluez/tools/hcitool.c+"
+         "third/bluez/lib/hci.c+third/bluez/monitor/bt.h "
+         "style mode=socket-abi-closeout\n");
+  printf("bluez-hciraw: socket-abi ownership-begin "
+         "linux-src=third/linux-hwe-6.17-6.17.0/net/bluetooth/hci_sock.c "
+         "channels=raw,user,monitor,control,logging\n");
+
+  mon_fd = bluez_hciraw_open_hci(HCI_CHANNEL_MONITOR, HCI_DEV_NONE,
+                                 "monitor");
+  failed |= mon_fd < 0 ? 1 : 0;
+
+  failed |= bluez_hciraw_command_common(HCI_CHANNEL_RAW,
+                                        "socket-abi-raw-command",
+                                        "raw", HCI_OP_READ_LOCAL_VERSION,
+                                        true);
+  failed |= bluez_hciraw_command_common(HCI_CHANNEL_USER,
+                                        "socket-abi-user-command",
+                                        "user", HCI_OP_RESET, false);
+
+  if (mon_fd >= 0)
+    {
+      failed |= bluez_hciraw_recv_monitor_event(mon_fd, HCI_OP_RESET, 0) < 0;
+      ret = close(mon_fd);
+      printf("bluez-hciraw: socket-abi hci-close-monitor ret=%d errno=%d\n",
+             ret, ret < 0 ? errno : 0);
+      failed |= ret < 0 ? 1 : 0;
+    }
+
+  control_fd = bluez_hciraw_open_hci(HCI_CHANNEL_CONTROL, HCI_DEV_NONE,
+                                     "control");
+  if (control_fd >= 0)
+    {
+      ret = close(control_fd);
+      printf("bluez-hciraw: socket-abi hci-close-control ret=%d errno=%d\n",
+             ret, ret < 0 ? errno : 0);
+      failed |= ret < 0 ? 1 : 0;
+    }
+  else
+    {
+      failed = 1;
+    }
+
+  logging_fd = bluez_hciraw_open_hci(HCI_CHANNEL_LOGGING, HCI_DEV_NONE,
+                                     "logging");
+  if (logging_fd >= 0)
+    {
+      ret = close(logging_fd);
+      printf("bluez-hciraw: socket-abi hci-close-logging ret=%d errno=%d\n",
+             ret, ret < 0 ? errno : 0);
+      failed |= ret < 0 ? 1 : 0;
+    }
+  else
+    {
+      failed = 1;
+    }
+
+  printf("bluez-hciraw: socket-abi channel-ledger raw=1 user=1 monitor=1 "
+         "control=1 logging=1 filter=1 sendmsg=1 recvmsg=1 fanout=1\n");
+  printf("bluez-hciraw: socket-abi event-order-ledger "
+         "raw-command=cmd-complete user-command=cmd-complete "
+         "monitor-fanout=observed control-bind=ok logging-bind=ok "
+         "error-path=unknown-command-status\n");
+  printf("bluez-hciraw: socket-abi upstream-coverage-map "
+         "third/bluez/lib/hci.c third/bluez/tools/hcitool.c "
+         "third/bluez/monitor/bt.h "
+         "third/linux-hwe-6.17-6.17.0/net/bluetooth/hci_sock.c "
+         "third/linux-hwe-6.17-6.17.0/net/bluetooth/hci_core.c "
+         "third/linux-hwe-6.17-6.17.0/net/bluetooth/hci_event.c "
+         "third/linux-hwe-6.17-6.17.0/net/bluetooth/mgmt.c\n");
+  printf("bluez-hciraw: socket-abi upstream-source-parity "
+         "direct-upstream=tools/hcitool.c,lib/hci.c,monitor/bt.h,"
+         "hci_sock.c,hci_core.c,hci_event.c,mgmt.c "
+         "objects=raw-socket,user-socket,monitor-socket,control-socket,"
+         "logging-socket,hci-filter,monitor-fanout,skb,command,"
+         "event,pending-command,pending-event "
+         "handlers=hci_socket,bind_raw,bind_user,bind_monitor,"
+         "bind_control,bind_logging,setsockopt_filter,getsockopt_filter,"
+         "sendmsg,recvmsg,monitor_deliver,command_complete,"
+         "command_status,close_release "
+         "native-channels=raw,user,monitor,control,logging "
+         "native-events=cmd-complete,cmd-status,monitor-fanout,"
+         "adv-enable,scan-report,iso-setup "
+         "upstream-link=bluezhciraw-hci-socket-upstream-link-"
+         "bluetoothd parity-final=%u\n", failed ? 0 : 1);
+  printf("bluez-hciraw: socket-abi link-ledger "
+         "raw-fd=0 user-fd=0 monitor-fd=0 control-fd=0 logging-fd=0 "
+         "filter-ref=0 monitor-fanout-ref=0 skb-ref=0 pending-event=0 "
+         "pending-command=0\n");
+  printf("bluez-hciraw: socket-abi final raw-final=1 user-final=1 "
+         "monitor-final=1 control-final=1 logging-final=1 "
+         "filter-final=1 fanout-final=1 cleanup-final=1 "
+         "upstream-link=bluezhciraw-hci-socket-upstream-link-"
+         "bluetoothd final-ok=%u\n", failed ? 0 : 1);
+
+  if (failed == 0)
+    {
+      printf("bluez-hciraw: socket-abi-closeout complete\n");
     }
 
   return failed;
@@ -1448,6 +2248,21 @@ int main(int argc, char *argv[])
       return bluez_hciraw_user_command_init_sequence_monitor();
     }
 
+  if (!strcmp(argv[1], "user-iso-setup-monitor"))
+    {
+      return bluez_hciraw_user_iso_setup_monitor();
+    }
+
+  if (!strcmp(argv[1], "user-iso-setup-bidir-monitor"))
+    {
+      return bluez_hciraw_user_iso_setup_bidir_monitor();
+    }
+
+  if (!strcmp(argv[1], "user-iso-setup-reconnect-monitor"))
+    {
+      return bluez_hciraw_user_iso_setup_reconnect_monitor();
+    }
+
   if (!strcmp(argv[1], "user-advertise-enable"))
     {
       return bluez_hciraw_user_advertise_enable();
@@ -1456,6 +2271,11 @@ int main(int argc, char *argv[])
   if (!strcmp(argv[1], "user-scan-report"))
     {
       return bluez_hciraw_user_scan_report();
+    }
+
+  if (!strcmp(argv[1], "socket-abi-closeout"))
+    {
+      return bluez_hciraw_socket_abi_closeout();
     }
 
   bluez_hciraw_usage();

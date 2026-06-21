@@ -28,6 +28,8 @@ else ifneq ($(CONFIG_LINUX_BLUEZ_BNEPTEST),)
 CONFIGURED_APPS += $(APPDIR)/wireless/linux_bluetooth
 else ifneq ($(CONFIG_LINUX_BLUEZ_NETWORK),)
 CONFIGURED_APPS += $(APPDIR)/wireless/linux_bluetooth
+else ifneq ($(CONFIG_LINUX_BLUEZ_IPSP),)
+CONFIGURED_APPS += $(APPDIR)/wireless/linux_bluetooth
 else ifneq ($(CONFIG_LINUX_BLUEZ_MGMT),)
 CONFIGURED_APPS += $(APPDIR)/wireless/linux_bluetooth
 else ifneq ($(CONFIG_LINUX_BLUEZ_BTMON),)

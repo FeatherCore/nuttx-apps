@@ -26,6 +26,7 @@
 
 #include <arpa/inet.h>
 #include <assert.h>
+#include <errno.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netpacket/rpmsg.h>
@@ -801,6 +802,7 @@ static int iperf_udp_client(FAR struct iperf_ctrl_t *ctrl,
   int opt;
   int err;
   int id;
+  struct timeval t;
 
   sockfd = socket(addr->sa_family, SOCK_DGRAM, IPPROTO_UDP);
   if (sockfd < 0)
@@ -816,6 +818,10 @@ static int iperf_udp_client(FAR struct iperf_ctrl_t *ctrl,
       close(sockfd);
       return -1;
     }
+
+  t.tv_sec = IPERF_SOCKET_TX_TIMEOUT;
+  t.tv_usec = 0;
+  setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &t, sizeof(t));
 
   iperf_start_report(ctrl);
   buffer = ctrl->buffer;
@@ -838,7 +844,7 @@ static int iperf_udp_client(FAR struct iperf_ctrl_t *ctrl,
       if (actual_send != want_send)
         {
           err = iperf_get_socket_error_code(sockfd);
-          if (err == ENOMEM)
+          if (err == ENOMEM || err == EAGAIN || err == EWOULDBLOCK)
             {
               usleep(delay * 10000);
               if (delay < IPERF_MAX_DELAY)
