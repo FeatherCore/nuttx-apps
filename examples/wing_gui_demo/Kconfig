@@ -1,0 +1,40 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_WING_GUI_DEMO
+	tristate "WING GUI standalone demo"
+	default n
+	select GRAPHICS_WING
+	---help---
+		Enable a minimal NSH-runnable WING GUI demo.
+
+		This demo validates the WING GUI layer without requiring WING
+		Desktop.  It runs as a normal application task, builds a WING GUI
+		frame into an FRender command list, executes the FRender software
+		backend, and optionally presents through the framebuffer adapter.
+
+if EXAMPLES_WING_GUI_DEMO
+
+config EXAMPLES_WING_GUI_DEMO_PROGNAME
+	string "Program name"
+	default "wing_gui_demo"
+
+config EXAMPLES_WING_GUI_DEMO_PRIORITY
+	int "WING GUI demo task priority"
+	default 100
+
+config EXAMPLES_WING_GUI_DEMO_STACKSIZE
+	int "WING GUI demo stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+config EXAMPLES_WING_GUI_DEMO_WIDTH
+	int "Demo surface width"
+	default 320
+
+config EXAMPLES_WING_GUI_DEMO_HEIGHT
+	int "Demo surface height"
+	default 240
+
+endif

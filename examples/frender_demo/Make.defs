@@ -1,10 +1,10 @@
 ############################################################################
-# apps/graphics/wing/Make.defs
+# apps/examples/frender_demo/Make.defs
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 ############################################################################
 
-ifneq ($(CONFIG_GRAPHICS_WING),)
-CONFIGURED_APPS += $(APPDIR)/graphics/wing
+ifneq ($(CONFIG_EXAMPLES_FRENDER_DEMO),)
+CONFIGURED_APPS += $(APPDIR)/examples/frender_demo
 endif

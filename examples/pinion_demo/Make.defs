@@ -1,10 +1,10 @@
 ############################################################################
-# apps/graphics/wing/Make.defs
+# apps/examples/pinion_demo/Make.defs
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 ############################################################################
 
-ifneq ($(CONFIG_GRAPHICS_WING),)
-CONFIGURED_APPS += $(APPDIR)/graphics/wing
+ifneq ($(CONFIG_EXAMPLES_PINION_DEMO),)
+CONFIGURED_APPS += $(APPDIR)/examples/pinion_demo
 endif
