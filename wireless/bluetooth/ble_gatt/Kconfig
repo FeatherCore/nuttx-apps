@@ -1,0 +1,32 @@
+#
+# For a description of the syntax of this configuration file,
+# see misc/tools/kconfig-language.txt.
+#
+
+config BLE_GATT_DEMO
+	tristate "BLE GATT server demo"
+	default n
+	depends on WIRELESS_BLUETOOTH_HOST && NET_BLUETOOTH
+	---help---
+		Enable a small NSH command that registers a minimal readable and
+		writable GATT service through the NuttX Bluetooth host GATT API.
+
+if BLE_GATT_DEMO
+
+config BLE_GATT_DEMO_PROGNAME
+	string "BLE GATT demo program name"
+	default "ble_gatt"
+
+config BLE_GATT_DEMO_PRIORITY
+	int "BLE GATT demo task priority"
+	default 100
+
+config BLE_GATT_DEMO_STACKSIZE
+	int "BLE GATT demo stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+config BLE_GATT_DEMO_DEFAULT_VALUE
+	string "Default GATT demo characteristic value"
+	default "Feather GATT ready"
+
+endif

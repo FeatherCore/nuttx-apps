@@ -1,0 +1,10 @@
+############################################################################
+# apps/wireless/bluetooth/ble_periph/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_BLE_PERIPH_DEMO),)
+CONFIGURED_APPS += $(APPDIR)/wireless/bluetooth/ble_periph
+endif

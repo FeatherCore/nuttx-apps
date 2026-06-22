@@ -1,0 +1,11 @@
+############################################################################
+# apps/wireless/bluetooth/ble_adv/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+############################################################################
+
+ifneq ($(CONFIG_BLE_ADV_DEMO),)
+CONFIGURED_APPS += $(APPDIR)/wireless/bluetooth/ble_adv
+endif
+

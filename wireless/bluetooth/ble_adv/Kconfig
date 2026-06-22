@@ -1,0 +1,37 @@
+#
+# For a description of the syntax of this configuration file,
+# see misc/tools/kconfig-language.txt.
+#
+
+config BLE_ADV_DEMO
+	tristate "BLE advertising demo"
+	default n
+	depends on WIRELESS_BLUETOOTH_HOST && NET_BLUETOOTH
+	---help---
+		Enable a small NSH command that starts/stops connectable BLE
+		advertising through the NuttX Bluetooth host ioctl path.
+
+if BLE_ADV_DEMO
+
+config BLE_ADV_DEMO_PROGNAME
+	string "BLE advertising demo program name"
+	default "ble_adv"
+
+config BLE_ADV_DEMO_PRIORITY
+	int "BLE advertising demo task priority"
+	default 100
+
+config BLE_ADV_DEMO_STACKSIZE
+	int "BLE advertising demo stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+config BLE_ADV_DEMO_IFNAME
+	string "Default Bluetooth network interface"
+	default "bnep0"
+
+config BLE_ADV_DEMO_NAME
+	string "Default BLE advertising name"
+	default "Feather-ESP-BLE"
+
+endif
+
